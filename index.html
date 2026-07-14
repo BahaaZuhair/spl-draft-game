@@ -57,6 +57,7 @@ header.top{display:flex;align-items:baseline;justify-content:space-between;gap:1
 .modecard b{font-size:15px}
 .modecard.sel b{color:var(--gold)}
 .modecard span{font-size:12px;color:var(--sand);line-height:1.4}
+.modecard .mode-note{display:block;margin-top:7px;color:var(--gold);font-size:10.5px;line-height:1.35;font-weight:700}
 .moderow{display:flex;gap:8px}
 @media (max-width:560px){.moderow{flex-direction:column}}
 .fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
@@ -411,7 +412,7 @@ table.lg tr:nth-child(-n+3) td.pos{color:var(--gold);font-weight:700}
       <div class="brand">SPL <span class="gold">Draft</span></div>
       <div class="brand-sub">Saudi Pro League · seasons 00/01 – 25/26 · 11,282 player cards</div>
     </div>
-    <div class="badge">V6.5 online</div>
+    <div class="badge">V6.5.1 online</div>
   </header>
 
   <!-- ============ SCREEN 1: SETUP OPTIONS ============ -->
@@ -442,7 +443,7 @@ table.lg tr:nth-child(-n+3) td.pos{color:var(--gold);font-weight:700}
       <p>Your team name appears in match results, the league table and the season awards.</p>
       <h3>2 · Set up the run</h3>
       <p><b>Difficulty:</b> Normal Mode gives you 2 skips for the whole run — a skip rerolls a club you don't like. Hard Mode gives no skips: every roll is final.</p>
-      <p><b>Draft mode:</b> <i>Ratings by Season</i> drafts the exact card of the season the roulette lands on. <i>Max Rating All-Time</i> uses the same rolls, but every player appears as his best-ever card.</p>
+      <p><b>Draft mode:</b> <i>Ratings by Season</i> drafts the exact card of the season the roulette lands on and is eligible for global leaderboards. <i>Max Rating All-Time</i> uses the same rolls, but every player appears as his best-ever card and remains local-only.</p>
       <p><b>Formation:</b> pick one of 22 shapes. Every drafted player must fit one of its positions.</p>
       <h3>3 · Draft your XI</h3>
       <p>Each round, two roulettes land on a club and a season — anywhere from 00/01 to 25/26. Pick one player from that roster who fits an open slot. The roulette only offers pools that can fill one of your open positions. Repeat until your XI is complete.</p>
@@ -537,7 +538,7 @@ table.lg tr:nth-child(-n+3) td.pos{color:var(--gold);font-weight:700}
         <div class="records-section-head">
           <div>
             <div class="h2">Global Leaderboards</div>
-            <p>Best completed runs submitted by SPL Draft players worldwide. Your private user ID is never displayed.</p>
+            <p>Ratings by Season runs only. Max Rating All-Time remains local-only and never enters the global rankings. Your private user ID is never displayed.</p>
           </div>
           <div class="online-tools">
             <span class="badge online-state" id="onlineStatusBadge">Connecting</span>
@@ -588,7 +589,7 @@ table.lg tr:nth-child(-n+3) td.pos{color:var(--gold);font-weight:700}
           <div class="opt-label">Draft mode</div>
           <div class="moderow" id="modeRow">
             <button class="modecard sel" data-v="season"><b>Ratings by Season</b><span>Roulette lands on a club and a season. You draft that exact season's card.</span></button>
-            <button class="modecard" data-v="alltime"><b>Max Rating All-Time</b><span>Same club-and-season rolls — but every player on the roster appears as his peak, best-ever card.</span></button>
+            <button class="modecard" data-v="alltime"><b>Max Rating All-Time</b><span>Same club-and-season rolls — but every player on the roster appears as his peak, best-ever card.</span><small class="mode-note">Local records only — this mode does not enter global leaderboards.</small></button>
           </div>
         </div>
       </div>
@@ -1316,7 +1317,7 @@ async function __inflate(t) {
 
     const xt = t => document.getElementById(t),
       PROFILE_KEY = "splDraftProfile_v1",
-      GAME_VERSION = "V6.5-online",
+      GAME_VERSION = "V6.5.1-season-board",
       SUPABASE_URL = "https://wyxtriciyixkglcrppgh.supabase.co",
       SUPABASE_PUBLISHABLE_KEY = "sb_publishable_-ZSGulpdWPsmHeX4_DY49Q_knHYIpSf",
       RUN_HISTORY_LIMIT = 100,
@@ -1486,6 +1487,8 @@ async function __inflate(t) {
         note.textContent = `✓ Online score accepted${Number.isFinite(+submission.serverScore) ? ` · ${Math.round(+submission.serverScore).toLocaleString()} points` : ""}`
       } else if ("skipped-practice" === submission.status) {
         note.textContent = "Daily Challenge practice attempts stay local and are not submitted to the global leaderboard."
+      } else if ("skipped-alltime" === submission.status) {
+        note.textContent = "Max Rating All-Time is local-only and does not enter the global leaderboard."
       } else if ("pending" === submission.status) {
         note.textContent = "Online score submission pending — it will retry when a connection is available."
       } else if ("error" === submission.status) {
@@ -1557,6 +1560,12 @@ async function __inflate(t) {
 
     async function submitRunOnline(run, options = {}) {
       if (!run || !run.runId) return !1;
+      if ("alltime" === run.draftMode) {
+        run.onlineSubmission = { status: "skipped-alltime", updatedAt: new Date().toISOString() };
+        saveLocalProfile();
+        updateOnlineSubmissionNote(run);
+        return !1
+      }
       if (run.isDailyChallenge && "official" !== run.dailyAttemptType) {
         run.onlineSubmission = { status: "skipped-practice", updatedAt: new Date().toISOString() };
         saveLocalProfile();
@@ -1611,7 +1620,7 @@ async function __inflate(t) {
     }
 
     async function flushPendingOnlineSubmissions() {
-      const pending = localProfile.runHistory.filter(run => run && run.onlineSubmission && ("pending" === run.onlineSubmission.status || "error" === run.onlineSubmission.status)).slice(0, 10);
+      const pending = localProfile.runHistory.filter(run => run && "season" === run.draftMode && run.onlineSubmission && ("pending" === run.onlineSubmission.status || "error" === run.onlineSubmission.status)).slice(0, 10);
       for (const run of pending) await submitRunOnline(run, { silent: !0 })
     }
 
@@ -1628,7 +1637,7 @@ async function __inflate(t) {
           p_limit: 10
         });
         if (error) throw error;
-        const rows = Array.isArray(data) ? data : [];
+        const rows = (Array.isArray(data) ? data : []).filter(row => row && "season" === row.draft_mode);
         body.innerHTML = rows.length ? rows.map(row => `<tr>
           <td>${Math.round(+row.rank || 0)}<\/td>
           <td>${escapeHtml(row.display_name || "Anonymous")}<\/td>
@@ -2257,7 +2266,7 @@ async function __inflate(t) {
         random = mulberry32(seed),
         fkey = kt[Math.floor(random() * kt.length)],
         skips = random() < .5 ? 0 : 2,
-        mode = random() < .5 ? "season" : "alltime";
+        mode = "season";
       return {
         dateKey,
         seed,
