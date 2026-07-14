@@ -402,7 +402,7 @@ table.lg tr:nth-child(-n+3) td.pos{color:var(--gold);font-weight:700}
       <div class="brand">SPL <span class="gold">Draft</span></div>
       <div class="brand-sub">Saudi Pro League · seasons 00/01 – 25/26 · 11,282 player cards</div>
     </div>
-    <div class="badge">V6.3 balanced</div>
+    <div class="badge">V6.4 balanced</div>
   </header>
 
   <!-- ============ SCREEN 1: SETUP OPTIONS ============ -->
@@ -2184,11 +2184,18 @@ async function __inflate(t) {
       xt("startBtn").disabled = !(null != Tt.fkey && null != Tt.skips)
     }
 
-    function n(t) {
+    let browserHistoryReady = false;
+
+    function n(t, options = {}) {
+      const currentScreen = activeScreenId();
       document.querySelectorAll(".screen").forEach(t => t.classList.remove("on")), xt(t).classList.add("on"), window.scrollTo({
         top: 0,
         behavior: "smooth"
-      })
+      });
+      if (browserHistoryReady && !options.fromHistory && currentScreen !== t) {
+        const state = { splDraft: true, screen: t };
+        options.replaceHistory ? history.replaceState(state, "", location.href) : history.pushState(state, "", location.href)
+      }
     }
 
     function l(t) {
@@ -2247,6 +2254,32 @@ async function __inflate(t) {
         return
       }
       hasUnsavedRunProgress() ? m("Return home?", "Return home? Your current run progress will be lost.", "Return Home", returnToMainMenu, trigger) : returnToMainMenu()
+    }
+
+    function returnHomeFromBrowserBack() {
+      const nameInput = xt("teamNameInput"),
+        typedName = nameInput ? nameInput.value.trim() : "";
+      typedName && persistTeamName(typedName);
+      o();
+      i();
+      xt("teamNameInput").value = Nt.teamName;
+      n("scr-menu", { fromHistory: true });
+      history.replaceState({ splDraft: true, screen: "scr-menu" }, "", location.href)
+    }
+
+    function initializeBrowserBackNavigation() {
+      history.replaceState({ splDraft: true, screen: activeScreenId() || "scr-menu" }, "", location.href);
+      browserHistoryReady = true;
+      window.addEventListener("popstate", () => {
+        const currentScreen = activeScreenId();
+        if (!currentScreen || "scr-menu" === currentScreen) return;
+        if (hasUnsavedRunProgress()) {
+          history.pushState({ splDraft: true, screen: currentScreen }, "", location.href);
+          m("Return home?", "Return home? Your current run progress will be lost.", "Return Home", returnHomeFromBrowserBack, xt("globalHomeBtn"));
+          return
+        }
+        returnHomeFromBrowserBack()
+      })
     }
     let Ot = null,
       Ft = null;
@@ -3393,6 +3426,7 @@ async function __inflate(t) {
     const $t = "Restart this run? Your current draft progress will be lost.",
       _t = "Return home? Your current draft progress will be lost.";
     xt("globalHomeBtn").addEventListener("click", event => handleGlobalHome(event.currentTarget));
+    initializeBrowserBackNavigation();
     xt("homeBtn").addEventListener("click", t => m("Return home?", _t, "Return Home", b, t.currentTarget)), xt("draftRestartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartRunBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("scoreRestartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartCtlBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("navCancel").addEventListener("click", () => W(!1)), xt("navConfirm").addEventListener("click", () => W(!0)), xt("navModal").addEventListener("keydown", t => {
       "Escape" === t.key && W(!1)
     }), xt("rollBtn").addEventListener("click", () => z(!1)), xt("skipBtn").addEventListener("click", () => z(!0)), xt("startSimBtn").addEventListener("click", B), xt("editPosBtn").addEventListener("click", () => {
