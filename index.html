@@ -624,6 +624,7 @@ table.lg tr:nth-child(-n+3) td.pos{color:var(--gold);font-weight:700}
     <div id="draftBackendTools" class="draft-backend-tools">
       <button class="btn ghost" id="serverRollTestBtn" type="button" disabled>Test Server Roll</button>
       <button class="btn ghost" id="serverSkipTestBtn" type="button" disabled>Test Server Skip</button>
+      <button class="btn ghost" id="serverSelectTestBtn" type="button" disabled>Test Server Selection</button>
       <span id="draftBackendDetails" class="draft-backend-details"></span>
     </div>
     <div class="draft">
@@ -1643,10 +1644,19 @@ async function __inflate(t) {
       const tools = document.getElementById("draftBackendTools"),
         rollButton = document.getElementById("serverRollTestBtn"),
         skipButton = document.getElementById("serverSkipTestBtn"),
+        selectButton = document.getElementById("serverSelectTestBtn"),
         detailNode = document.getElementById("draftBackendDetails");
-      if (!tools || !rollButton || !skipButton || !detailNode) return;
+      if (
+        !tools ||
+        !rollButton ||
+        !skipButton ||
+        !selectButton ||
+        !detailNode
+      ) return;
+
       tools.classList.toggle("on", !!visible);
       detailNode.textContent = details;
+
       const ready = !!(
         visible &&
         gt &&
@@ -1654,12 +1664,25 @@ async function __inflate(t) {
         "verified" === gt.serverShadow.status &&
         gt.serverShadow.serverRunId
       );
-      rollButton.disabled = !ready;
       const currentOffer = ready && gt.serverShadow.currentOffer;
+      const selectionComplete = !!(
+        ready &&
+        "verified" === gt.serverShadow.selectionStatus
+      );
+
+      rollButton.disabled = !ready || selectionComplete;
       skipButton.disabled = !(
         ready &&
         currentOffer &&
-        +currentOffer.skipsLeft > 0
+        +currentOffer.skipsLeft > 0 &&
+        !selectionComplete
+      );
+      selectButton.disabled = !(
+        ready &&
+        currentOffer &&
+        Array.isArray(currentOffer.cards) &&
+        currentOffer.cards.length &&
+        !selectionComplete
       )
     }
 
@@ -1831,6 +1854,220 @@ async function __inflate(t) {
         if (rollButton) rollButton.disabled = !1;
         const offer = gt && gt.serverShadow && gt.serverShadow.currentOffer;
         if (skipButton) skipButton.disabled = !(offer && +offer.skipsLeft > 0)
+      }
+    }
+
+    function findServerSelectionCandidate(offer) {
+      if (!offer || !Array.isArray(offer.cards) || !gt) return null;
+
+      const offeredSlotIndexes = Array.isArray(offer.fittingSlotIndexes)
+        ? offer.fittingSlotIndexes.map(Number)
+        : [];
+
+      for (const card of offer.cards) {
+        for (const slotIndex of offeredSlotIndexes) {
+          const slot = gt.slots.find(item => +item.idx === +slotIndex);
+          if (slot && !slot.player && f(card, slot.code)) {
+            return {
+              card,
+              slotIndex: +slotIndex,
+              slotCode: slot.code
+            }
+          }
+        }
+      }
+
+      return null
+    }
+
+    function validateServerSelectionResult(
+      result,
+      candidate,
+      expectedRunId
+    ) {
+      const issues = [];
+      if (!result || "object" !== typeof result) {
+        return ["Missing server selection result"]
+      }
+
+      const selectedCard = result.selectedCard,
+        state = result.state,
+        selectedSlotIndex = +result.selectedSlotIndex;
+
+      if (!selectedCard) issues.push("Missing selected card");
+      if (selectedCard && selectedCard.card_id !== candidate.card.card_id) {
+        issues.push("Selected card ID mismatch")
+      }
+      if (selectedCard && selectedCard.player_id !== candidate.card.player_id) {
+        issues.push("Selected player ID mismatch")
+      }
+      if (selectedSlotIndex !== candidate.slotIndex) {
+        issues.push("Selected slot index mismatch")
+      }
+      if (!state || state.runId !== expectedRunId) {
+        issues.push("Returned draft state mismatch")
+      }
+      if (state && +state.currentPick !== 2) {
+        issues.push(`Expected server Pick 2, received ${state.currentPick}`)
+      }
+      if (state && "drafting" !== state.status) {
+        issues.push(`Unexpected run status: ${state.status}`)
+      }
+
+      const slots = state && Array.isArray(state.slots)
+        ? state.slots
+        : [];
+      if (11 !== slots.length) issues.push("Server state no longer has 11 slots");
+
+      const selectedSlots = slots.filter(slot => slot && slot.cardId);
+      if (1 !== selectedSlots.length) {
+        issues.push(`Expected exactly 1 selected card, received ${selectedSlots.length}`)
+      }
+
+      const storedSlot = slots.find(
+        slot => +slot.index === candidate.slotIndex
+      );
+      if (!storedSlot) {
+        issues.push("Selected slot is missing from server state")
+      } else {
+        if (storedSlot.cardId !== candidate.card.card_id) {
+          issues.push("Server slot card ID mismatch")
+        }
+        if (storedSlot.playerId !== candidate.card.player_id) {
+          issues.push("Server slot player ID mismatch")
+        }
+      }
+
+      return issues
+    }
+
+    async function invokeServerSelection(candidate, offer) {
+      await initializeOnlineBackend();
+
+      const { data, error } = await onlineClient.functions.invoke(
+        "select-player",
+        {
+          body: {
+            runId: gt.serverShadow.serverRunId,
+            offerId: offer.offerId,
+            cardId: candidate.card.card_id,
+            slotIndex: candidate.slotIndex
+          }
+        }
+      );
+
+      if (error) throw error;
+      if (!data || !data.ok || !data.result) {
+        throw new Error(
+          data && data.errorCode || "Missing server selection result"
+        )
+      }
+
+      return data.result
+    }
+
+    async function verifySelectionReplayRejected(candidate, offer) {
+      try {
+        const { data, error } = await onlineClient.functions.invoke(
+          "select-player",
+          {
+            body: {
+              runId: gt.serverShadow.serverRunId,
+              offerId: offer.offerId,
+              cardId: candidate.card.card_id,
+              slotIndex: candidate.slotIndex
+            }
+          }
+        );
+
+        if (!error && data && data.ok) return !1;
+        return !0
+      } catch {
+        return !0
+      }
+    }
+
+    async function runServerSelectionShadowTest() {
+      const rollButton = document.getElementById("serverRollTestBtn"),
+        skipButton = document.getElementById("serverSkipTestBtn"),
+        selectButton = document.getElementById("serverSelectTestBtn"),
+        offer = gt && gt.serverShadow && gt.serverShadow.currentOffer;
+
+      if (!offer) return;
+
+      const candidate = findServerSelectionCandidate(offer);
+      if (!candidate) {
+        setDraftBackendStatus(
+          "error",
+          "Server selection test failed: no returned card matched a fitting open slot."
+        );
+        return
+      }
+
+      if (rollButton) rollButton.disabled = !0;
+      if (skipButton) skipButton.disabled = !0;
+      if (selectButton) selectButton.disabled = !0;
+
+      setDraftBackendStatus(
+        "testing",
+        `Private backend test: selecting ${candidate.card.name} into ${candidate.slotCode}…`
+      );
+
+      try {
+        const result = await invokeServerSelection(candidate, offer),
+          issues = validateServerSelectionResult(
+            result,
+            candidate,
+            gt.serverShadow.serverRunId
+          );
+
+        if (issues.length) throw new Error(issues.join(", "));
+
+        const replayRejected = await verifySelectionReplayRejected(
+          candidate,
+          offer
+        );
+
+        if (!replayRejected) {
+          throw new Error("The same accepted offer could be submitted twice")
+        }
+
+        gt.serverShadow.selectionStatus = "verified";
+        gt.serverShadow.selectionCheckedAt = new Date().toISOString();
+        gt.serverShadow.selectedCard = result.selectedCard;
+        gt.serverShadow.selectedSlotIndex = result.selectedSlotIndex;
+        gt.serverShadow.serverStateAfterSelection = result.state;
+
+        setDraftBackendStatus(
+          "ok",
+          `✓ Server selection verified: ${result.selectedCard.name} stored in ${candidate.slotCode}, Pick 1 advanced to Pick 2, and replay was rejected.`
+        );
+        setDraftBackendTools(
+          !0,
+          `Server Pick ${result.state.currentPick} · 1 private card stored · local draft remains unchanged`
+        );
+
+        console.info(
+          "select-player shadow verification passed",
+          result
+        )
+      } catch (error) {
+        console.warn("select-player shadow test failed.", error);
+        gt.serverShadow.selectionStatus = "error";
+        gt.serverShadow.selectionError = String(
+          error && error.message || error
+        ).slice(0, 180);
+
+        setDraftBackendStatus(
+          "error",
+          `Server selection test failed: ${String(
+            error && error.message || error
+          )}`
+        );
+        setDraftBackendTools(
+          !0,
+          "The local draft remains unchanged and usable."
+        )
       }
     }
 
@@ -3971,7 +4208,7 @@ async function __inflate(t) {
     initializeBrowserBackNavigation();
     xt("homeBtn").addEventListener("click", t => m("Return home?", _t, "Return Home", b, t.currentTarget)), xt("draftRestartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartRunBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("scoreRestartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartCtlBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("navCancel").addEventListener("click", () => W(!1)), xt("navConfirm").addEventListener("click", () => W(!0)), xt("navModal").addEventListener("keydown", t => {
       "Escape" === t.key && W(!1)
-    }), xt("rollBtn").addEventListener("click", () => z(!1)), xt("skipBtn").addEventListener("click", () => z(!0)), document.getElementById("serverRollTestBtn").addEventListener("click", runServerRouletteShadowTest), document.getElementById("serverSkipTestBtn").addEventListener("click", runServerSkipShadowTest), xt("startSimBtn").addEventListener("click", B), xt("editPosBtn").addEventListener("click", () => {
+    }), xt("rollBtn").addEventListener("click", () => z(!1)), xt("skipBtn").addEventListener("click", () => z(!0)), document.getElementById("serverRollTestBtn").addEventListener("click", runServerRouletteShadowTest), document.getElementById("serverSkipTestBtn").addEventListener("click", runServerSkipShadowTest), document.getElementById("serverSelectTestBtn").addEventListener("click", runServerSelectionShadowTest), xt("startSimBtn").addEventListener("click", B), xt("editPosBtn").addEventListener("click", () => {
       F(), d("sumModal"), xt("openSummaryBtn").style.display = "inline-block"
     }), xt("openSummaryBtn").addEventListener("click", g), xt("swapCancel").addEventListener("click", () => d("swapModal")), xt("nextMdBtn").addEventListener("click", () => A(!0)), xt("skipEndBtn").addEventListener("click", function() {
       if (Ct)
