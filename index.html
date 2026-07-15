@@ -96,6 +96,8 @@ header.top{display:flex;align-items:baseline;justify-content:space-between;gap:1
 .draft-backend-status.ok{border-color:rgba(90,200,120,.48);color:var(--green);background:rgba(90,200,120,.07)}
 .draft-backend-status.error{border-color:rgba(224,90,90,.48);color:var(--red);background:rgba(224,90,90,.07)}
 .draft-backend-status.testing{border-color:rgba(232,185,75,.42);color:var(--gold);background:rgba(232,185,75,.07)}
+.roulette-queued #clubStrip,.roulette-queued #seasonStrip{filter:brightness(1.12);animation:queuedRollPulse .42s ease-in-out infinite alternate}
+@keyframes queuedRollPulse{from{opacity:.72}to{opacity:1}}
 .draft-backend-tools{display:none;gap:8px;align-items:center;flex-wrap:wrap;margin:-6px 0 14px}
 .draft-backend-tools.on{display:flex}
 .draft-backend-tools .btn{padding:8px 12px;font-size:12px}
@@ -1720,6 +1722,8 @@ async function __inflate(t) {
           serverRunId: data.state.runId || null,
           checkedAt: new Date().toISOString(),
           currentOffer: data.state.activeOffer || null,
+          selectionPending: !1,
+          queuedRollRequested: !1,
           issues
         };
 
@@ -3355,6 +3359,7 @@ async function __inflate(t) {
         gt.rolling = !1;
         gt.serverActionPending = !1;
         gt.roll = selectedPool;
+        setQueuedRollVisual(!1);
 
         X(gt.skipsLeft > 0);
 
@@ -3381,7 +3386,7 @@ async function __inflate(t) {
           )} ${selectedPool.season} · ${
             selectedPool.pool.length
           } eligible cards · ${gt.skipsLeft} skips left${
-            prefetched ? " · preloaded" : ""
+            ""
           }.`
         )
       };
@@ -3426,6 +3431,47 @@ async function __inflate(t) {
       }, 2950)
     }
 
+    function setQueuedRollVisual(active) {
+      const rollButton = xt("rollBtn"),
+        rouletteArea = rollButton &&
+          rollButton.closest(".roulette");
+
+      if (rouletteArea) {
+        rouletteArea.classList.toggle(
+          "roulette-queued",
+          !!active
+        )
+      }
+
+      if (rollButton) {
+        rollButton.textContent = active
+          ? "Rolling…"
+          : "Roll"
+      }
+    }
+
+    function queueRollBehindPendingSelection() {
+      if (
+        !gt ||
+        !gt.serverShadow ||
+        !gt.serverShadow.selectionPending ||
+        gt.serverShadow.queuedRollRequested
+      ) return;
+
+      gt.serverShadow.queuedRollRequested = !0;
+      gt.rolling = !0;
+
+      xt("rollBtn").disabled = !0;
+      X(!1);
+      xt("rosterPanel").style.display = "none";
+      setQueuedRollVisual(!0);
+
+      setDraftBackendStatus(
+        "testing",
+        "Secure server draft: Roll accepted — finishing the previous pick during the roulette."
+      )
+    }
+
     async function runServerDraftRoll(useSkip) {
       if (
         !gt ||
@@ -3433,12 +3479,18 @@ async function __inflate(t) {
         !gt.serverShadow ||
         "verified" !== gt.serverShadow.status ||
         !gt.serverShadow.serverRunId ||
-        gt.rolling ||
         gt.complete ||
-        gt.pendingPlayer ||
-        gt.serverActionPending
+        gt.pendingPlayer
       ) return;
 
+      if (gt.serverShadow.selectionPending) {
+        if (!useSkip) {
+          queueRollBehindPendingSelection()
+        }
+        return
+      }
+
+      if (gt.rolling || gt.serverActionPending) return;
       if (useSkip && gt.skipsLeft <= 0) return;
 
       const prefetchedOffer =
@@ -3454,7 +3506,7 @@ async function __inflate(t) {
       if (prefetchedOffer) {
         setDraftBackendStatus(
           "testing",
-          "Secure server draft: opening the preloaded next offer…"
+          "Secure server draft: rolling the next eligible club and season…"
         );
 
         try {
@@ -3469,6 +3521,7 @@ async function __inflate(t) {
           gt.rolling = !1;
           gt.serverActionPending = !1;
           gt.serverShadow.prefetchedOffer = null;
+          setQueuedRollVisual(!1);
           xt("rollBtn").disabled = !1;
 
           setDraftBackendStatus(
@@ -3521,6 +3574,7 @@ async function __inflate(t) {
         gt.rolling = !1;
         gt.serverActionPending = !1;
         gt.roll = null;
+        setQueuedRollVisual(!1);
 
         console.warn(
           "Secure server roll failed.",
@@ -3554,6 +3608,11 @@ async function __inflate(t) {
           : []
       };
 
+      const queuedRoll = !!(
+        gt.serverShadow &&
+        gt.serverShadow.queuedRollRequested
+      );
+
       gt.slots[slotIndex].player = card;
       gt.draftedCards.add(card.card_id);
       gt.draftedPlayers.add(card.player_id);
@@ -3563,6 +3622,8 @@ async function __inflate(t) {
       gt.skipsLeft = +serverState.skipsLeft;
       gt.serverShadow.currentOffer = null;
       gt.serverShadow.prefetchedOffer = nextOffer || null;
+      gt.serverShadow.selectionPending = !1;
+      gt.serverShadow.queuedRollRequested = !1;
 
       xt("rosterPanel").style.display = "none";
       X(!1);
@@ -3575,6 +3636,8 @@ async function __inflate(t) {
 
       if ("squad_complete" === serverState.status) {
         gt.complete = !0;
+        gt.rolling = !1;
+        setQueuedRollVisual(!1);
         xt("rollBtn").disabled = !0;
         clearSecureDraftResumeMarker();
 
@@ -3588,17 +3651,42 @@ async function __inflate(t) {
         const token = It;
         setTimeout(() => {
           token === It && gt && g()
-        }, 450)
-      } else {
-        xt("rollBtn").disabled = !1;
+        }, 450);
+
+        return
+      }
+
+      if (queuedRoll && nextOffer) {
+        gt.rolling = !0;
+        xt("rollBtn").disabled = !0;
+        setQueuedRollVisual(!0);
 
         setDraftBackendStatus(
-          "ok",
-          nextOffer
-            ? `✓ Selection confirmed. Pick ${gt.pick} is ready.`
-            : `✓ Secure selection stored. Server advanced to Pick ${gt.pick}.`
-        )
+          "testing",
+          "Secure server draft: previous pick confirmed — roulette is landing on the next eligible offer."
+        );
+
+        showSecureServerOffer(
+          nextOffer,
+          {
+            animate: !0,
+            prefetched: !0
+          }
+        );
+
+        return
       }
+
+      gt.rolling = !1;
+      setQueuedRollVisual(!1);
+      xt("rollBtn").disabled = !1;
+
+      setDraftBackendStatus(
+        "ok",
+        nextOffer
+          ? `✓ Selection confirmed. Pick ${gt.pick} is ready.`
+          : `✓ Secure selection stored. Server advanced to Pick ${gt.pick}.`
+      )
     }
 
     function applyOptimisticServerSelection(
@@ -3639,9 +3727,16 @@ async function __inflate(t) {
       U(slotIndex);
       H();
 
+      gt.serverShadow.selectionPending = !0;
+      gt.serverShadow.queuedRollRequested = !1;
+      gt.rolling = !1;
+
+      xt("rollBtn").disabled = !1;
+      setQueuedRollVisual(!1);
+
       setDraftBackendStatus(
         "testing",
-        `Confirming ${normalizedCard.name} with the secure server…`
+        `Confirming ${normalizedCard.name} securely. You can press Roll now.`
       );
 
       return snapshot
@@ -3664,6 +3759,11 @@ async function __inflate(t) {
       gt.draftedCards.delete(snapshot.cardId);
       gt.draftedPlayers.delete(snapshot.playerId);
       gt.pendingPlayer = null;
+      gt.rolling = !1;
+      gt.serverActionPending = !1;
+      gt.serverShadow.selectionPending = !1;
+      gt.serverShadow.queuedRollRequested = !1;
+      setQueuedRollVisual(!1);
 
       U(snapshot.slotIndex);
       H();
@@ -3696,7 +3796,6 @@ async function __inflate(t) {
         );
 
       gt.serverActionPending = !0;
-      xt("rollBtn").disabled = !0;
       X(!1);
 
       try {
@@ -3750,7 +3849,9 @@ async function __inflate(t) {
           )}`
         )
       } finally {
-        gt.serverActionPending = !1
+        if (gt && !gt.rolling) {
+          gt.serverActionPending = !1
+        }
       }
     }
 
@@ -3829,8 +3930,10 @@ async function __inflate(t) {
           status: "verified",
           serverRunId: state.runId,
           checkedAt: new Date().toISOString(),
-          currentOffer: state.activeOffer || null,
-          prefetchedOffer: null,
+          currentOffer: null,
+          prefetchedOffer: state.activeOffer || null,
+          selectionPending: !1,
+          queuedRollRequested: !1,
           resumed: !0
         }
       };
@@ -3884,20 +3987,12 @@ async function __inflate(t) {
         "ok",
         `✓ Secure draft resumed: Pick ${gt.pick}, ${
           gt.draftedCards.size
-        } players restored, ${gt.skipsLeft} skips left.`
+        } players restored, ${gt.skipsLeft} skips left. Press Roll to reveal the next club and season.`
       );
 
-      if (state.activeOffer) {
-        showSecureServerOffer(
-          state.activeOffer,
-          {
-            animate: !1,
-            resumed: !0
-          }
-        )
-      } else {
-        X(!1)
-      }
+      xt("rosterPanel").style.display = "none";
+      gt.roll = null;
+      X(!1)
     }
 
     let pendingSecureResumeState = null,
