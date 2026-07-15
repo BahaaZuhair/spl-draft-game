@@ -91,6 +91,11 @@ header.top{display:flex;align-items:baseline;justify-content:space-between;gap:1
 .draft{display:grid;grid-template-columns:minmax(320px,440px) 1fr;gap:22px;align-items:start}
 @media (max-width:900px){.draft{grid-template-columns:1fr}}
 .status{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.draft-backend-status{display:none;margin:-5px 0 14px;padding:9px 12px;border-radius:10px;font-size:12px;line-height:1.4;border:1px solid rgba(237,243,236,.12);background:rgba(15,32,25,.72);color:var(--sand)}
+.draft-backend-status.on{display:block}
+.draft-backend-status.ok{border-color:rgba(90,200,120,.48);color:var(--green);background:rgba(90,200,120,.07)}
+.draft-backend-status.error{border-color:rgba(224,90,90,.48);color:var(--red);background:rgba(224,90,90,.07)}
+.draft-backend-status.testing{border-color:rgba(232,185,75,.42);color:var(--gold);background:rgba(232,185,75,.07)}
 .pick-no{font-family:var(--disp);font-size:20px;letter-spacing:.05em}
 .pick-no span{color:var(--gold)}
 .rate-live{font-size:13px;color:var(--sand)}
@@ -611,6 +616,7 @@ table.lg tr:nth-child(-n+3) td.pos{color:var(--gold);font-weight:700}
       <div class="pick-no">Pick <span id="pickNo">1</span> / 11 · <span id="formName"></span></div>
       <div class="rate-live">Squad rating so far <b id="liveRate">—</b></div>
     </div>
+    <div id="draftBackendStatus" class="draft-backend-status" role="status" aria-live="polite"></div>
     <div class="draft">
       <div class="pitch" id="pitch">
         <svg class="lines" viewBox="0 0 100 139" preserveAspectRatio="none">
@@ -1320,6 +1326,7 @@ async function __inflate(t) {
       GAME_VERSION = "V6.5.1-season-board",
       SUPABASE_URL = "https://wyxtriciyixkglcrppgh.supabase.co",
       SUPABASE_PUBLISHABLE_KEY = "sb_publishable_-ZSGulpdWPsmHeX4_DY49Q_knHYIpSf",
+      DRAFT_SHADOW_TEST_ENABLED = new URLSearchParams(window.location.search).get("backendTest") === "1",
       RUN_HISTORY_LIMIT = 100,
       RUN_SCORE_CONFIG = {
         pointsValue: 100,
@@ -1535,6 +1542,89 @@ async function __inflate(t) {
         throw error
       });
       return onlineReadyPromise
+    }
+
+    function setDraftBackendStatus(state, text) {
+      const note = document.getElementById("draftBackendStatus");
+      if (!note) return;
+      note.classList.remove("on", "ok", "error", "testing");
+      if (!text) {
+        note.textContent = "";
+        return
+      }
+      note.classList.add("on", state);
+      note.textContent = text
+    }
+
+    function compareShadowDraftState(localRun, serverState, expected) {
+      const issues = [];
+      if (!serverState || "object" !== typeof serverState) return ["Missing server draft state"];
+      if (!serverState.runId) issues.push("Missing server run ID");
+      if (serverState.clientRunId !== localRun.runId) issues.push("Client run ID mismatch");
+      if (serverState.formationCode !== expected.formationCode) issues.push("Formation mismatch");
+      if (serverState.difficulty !== expected.difficulty) issues.push("Difficulty mismatch");
+      if (serverState.draftMode !== expected.draftMode) issues.push("Draft mode mismatch");
+      if (+serverState.skipsInitial !== +expected.skips) issues.push("Initial skips mismatch");
+      if (+serverState.skipsLeft !== +expected.skips) issues.push("Remaining skips mismatch");
+      const serverSlots = Array.isArray(serverState.slots) ? serverState.slots : [];
+      if (11 !== serverSlots.length) issues.push(`Expected 11 slots, received ${serverSlots.length}`);
+      if (11 === serverSlots.length) {
+        localRun.slots.forEach((slot, index) => {
+          const remote = serverSlots.find(item => +item.index === index);
+          if (!remote) {
+            issues.push(`Missing slot ${index}`);
+            return
+          }
+          if (remote.code !== slot.code) issues.push(`Slot ${index} code mismatch`);
+          if (+remote.x !== +slot.x || +remote.y !== +slot.y) issues.push(`Slot ${index} coordinates mismatch`)
+        })
+      }
+      return issues
+    }
+
+    async function runStartDraftShadowTest(localRun, expected) {
+      if (!DRAFT_SHADOW_TEST_ENABLED || !localRun || localRun.isDaily) return;
+      setDraftBackendStatus("testing", "Private backend test: creating secure draft state…");
+      try {
+        await initializeOnlineBackend();
+        const { data, error } = await onlineClient.functions.invoke("start-draft", {
+          body: {
+            clientRunId: localRun.runId,
+            teamName: Jt(),
+            formationCode: expected.formationCode,
+            difficulty: expected.difficulty,
+            draftMode: expected.draftMode
+          }
+        });
+        if (error) throw error;
+        if (!data || !data.ok || !data.state) throw new Error(data && data.errorCode || "Missing server state");
+        const issues = compareShadowDraftState(localRun, data.state, expected);
+        localRun.serverShadow = {
+          status: issues.length ? "mismatch" : "verified",
+          serverRunId: data.state.runId || null,
+          checkedAt: new Date().toISOString(),
+          issues
+        };
+        if (issues.length) {
+          console.warn("start-draft shadow verification mismatch", {
+            issues,
+            localRun,
+            serverState: data.state
+          });
+          setDraftBackendStatus("error", `Private backend mismatch: ${issues.join(", ")}`)
+        } else {
+          console.info("start-draft shadow verification passed", data.state);
+          setDraftBackendStatus("ok", "✓ Private backend verified: authenticated run, 11 slots, formation, mode and skips all match.")
+        }
+      } catch (error) {
+        localRun.serverShadow = {
+          status: "error",
+          checkedAt: new Date().toISOString(),
+          error: String(error && error.message || error).slice(0, 180)
+        };
+        console.warn("start-draft shadow test failed; local game continues normally.", error);
+        setDraftBackendStatus("error", "Private backend test failed. The local draft still works; check the browser console and Edge Function logs.")
+      }
     }
 
     function onlinePayloadForRun(run) {
@@ -3574,7 +3664,18 @@ async function __inflate(t) {
       X(!1);
       H();
       U();
-      n("scr-draft")
+      n("scr-draft");
+      if (DRAFT_SHADOW_TEST_ENABLED && !isDaily) {
+        const expectedDifficulty = 0 === skips ? "hard" : "normal";
+        runStartDraftShadowTest(gt, {
+          formationCode: fkey,
+          difficulty: expectedDifficulty,
+          draftMode: mode,
+          skips
+        })
+      } else {
+        setDraftBackendStatus("", "")
+      }
     }
 
     function st() {
@@ -3641,6 +3742,7 @@ async function __inflate(t) {
       renderGlobalLeaderboard()
     }));
     xt("refreshGlobalLeaderboardBtn").addEventListener("click", renderGlobalLeaderboard);
+    if (DRAFT_SHADOW_TEST_ENABLED) console.info("SPL Draft private-backend shadow test is ENABLED.");
     initializeOnlineBackend().then(() => renderGlobalLeaderboard()).catch(() => {});
     xt("exportRecordsBtn").addEventListener("click", exportLocalProfile);
     xt("importRecordsBtn").addEventListener("click", () => xt("importRecordsFile").click());
