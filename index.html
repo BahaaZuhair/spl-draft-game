@@ -197,6 +197,8 @@ header.top{display:flex;align-items:baseline;justify-content:space-between;gap:1
 .season-top{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:16px}
 .season-top .h1{font-size:clamp(22px,3.4vw,32px)}
 .season-sub{color:var(--sand);font-size:13.5px;margin-top:6px}
+.secure-season-test-badge{display:none;margin-top:7px;font-size:11px;color:var(--gold);letter-spacing:.06em;text-transform:uppercase}
+body.secure-season-test .secure-season-test-badge{display:block}
 .season-sub b{color:var(--gold)}
 .season-ctl{display:flex;gap:10px;flex-wrap:wrap}
 .latest{margin-bottom:16px}
@@ -688,6 +690,7 @@ table.lg tr:nth-child(-n+3) td.pos{color:var(--gold);font-weight:700}
       <div>
         <h1 class="h1">Season 25/26</h1>
         <div class="season-sub"><span id="seasonYou">Your draft</span> replaces <b id="replacedClub"></b> · Matchday <b id="mdNow">0</b> / 34</div>
+        <div class="secure-season-test-badge">Phase 4 secure server season test</div>
       </div>
       <div class="season-ctl" id="seasonCtl">
         <button class="btn" id="nextMdBtn">Play Next Game</button>
@@ -1376,7 +1379,10 @@ async function __inflate(t) {
       SUPABASE_PUBLISHABLE_KEY = "sb_publishable_-ZSGulpdWPsmHeX4_DY49Q_knHYIpSf",
       DRAFT_SHADOW_TEST_ENABLED = !1,
       DRAFT_SERVER_MODE_ENABLED = !0,
+      SERVER_SEASON_TEST_ENABLED =
+        new URLSearchParams(window.location.search).get("serverSeason") === "1",
       SERVER_DRAFT_RESUME_KEY = "spl_draft_secure_run_v1",
+      SERVER_SEASON_RESUME_KEY = "spl_draft_secure_season_v1",
       RUN_HISTORY_LIMIT = 100,
       RUN_SCORE_CONFIG = {
         pointsValue: 100,
@@ -2595,10 +2601,39 @@ async function __inflate(t) {
         isNewHighScore: !1,
         newAchievementIds: []
       };
-      const scoreBreakdown = calculateRunScore(runData),
+      const trustedSeasonResult =
+          Ct &&
+          Ct.serverMode &&
+          Ct.serverFinalResult
+            ? Ct.serverFinalResult
+            : null,
+        normalizedRunData = trustedSeasonResult
+          ? {
+              ...runData,
+              finalPosition: +trustedSeasonResult.finalPosition,
+              played: +trustedSeasonResult.played,
+              wins: +trustedSeasonResult.wins,
+              draws: +trustedSeasonResult.draws,
+              losses: +trustedSeasonResult.losses,
+              goalsFor: +trustedSeasonResult.goalsFor,
+              goalsAgainst: +trustedSeasonResult.goalsAgainst,
+              goalDifference: +trustedSeasonResult.goalDifference,
+              points: +trustedSeasonResult.points,
+              cleanSheets: +trustedSeasonResult.cleanSheets
+            }
+          : runData,
+        scoreBreakdown =
+          trustedSeasonResult &&
+          trustedSeasonResult.scoreBreakdown
+            ? trustedSeasonResult.scoreBreakdown
+            : calculateRunScore(normalizedRunData),
         run = {
-          ...runData,
-          score: scoreBreakdown.finalScore,
+          ...normalizedRunData,
+          score:
+            trustedSeasonResult &&
+            Number.isFinite(+trustedSeasonResult.finalScore)
+              ? +trustedSeasonResult.finalScore
+              : scoreBreakdown.finalScore,
           scoreBreakdown
         },
         previousHigh = localProfile.personalRecords.highestRunScore ? +localProfile.personalRecords.highestRunScore.value : -1,
@@ -2677,8 +2712,41 @@ async function __inflate(t) {
       }
 
       const newAchievementIds = checkSeasonAchievements(run);
+
+      if (trustedSeasonResult) {
+        run.onlineSubmission =
+          "season" === run.draftMode
+            ? {
+                status:
+                  trustedSeasonResult.leaderboardSubmitted
+                    ? "accepted"
+                    : "pending",
+                serverScore: run.score,
+                scoreId:
+                  trustedSeasonResult.leaderboardScoreId || null,
+                acceptedAt:
+                  trustedSeasonResult.leaderboardSubmitted
+                    ? new Date().toISOString()
+                    : null,
+                updatedAt: new Date().toISOString(),
+                trustedServerResult: !0
+              }
+            : {
+                status: "skipped-alltime",
+                updatedAt: new Date().toISOString(),
+                trustedServerResult: !0
+              }
+      }
+
       saveLocalProfile();
-      queueMicrotask(() => submitRunOnline(run));
+
+      if (trustedSeasonResult) {
+        updateOnlineSubmissionNote(run);
+        renderGlobalLeaderboard()
+      } else {
+        queueMicrotask(() => submitRunOnline(run))
+      }
+
       return {
         saved: !0,
         run,
@@ -3977,9 +4045,19 @@ async function __inflate(t) {
           "✓ Secure completed squad restored from the private server."
         );
 
-        setTimeout(() => {
-          gt && g()
-        }, 250);
+        if (pendingSecureSeasonResume) {
+          pendingSecureSeasonResume = !1;
+
+          setTimeout(() => {
+            gt && startSecureServerSeason({
+              resume: !0
+            })
+          }, 250)
+        } else {
+          setTimeout(() => {
+            gt && g()
+          }, 250)
+        }
 
         return
       }
@@ -4654,7 +4732,7 @@ async function __inflate(t) {
       let t = 10;
       const s = It;
       xt("startSimBtn").textContent = `Kick-off in ${t}\u2026`, Bt = setInterval(() => {
-        s === It ? (t--, t <= 0 ? (F(), B()) : xt("startSimBtn").textContent = `Kick-off in ${t}\u2026`) : F()
+        s === It ? (t--, t <= 0 ? (F(), startSeasonFlow()) : xt("startSimBtn").textContent = `Kick-off in ${t}\u2026`) : F()
       }, 1e3)
     }
 
@@ -4705,6 +4783,531 @@ async function __inflate(t) {
 
     function Q(t) {
       return t === Lt ? Jt() : t
+    }
+
+    let pendingSecureSeasonResume = !1;
+
+    function readSecureSeasonResumeMarker() {
+      try {
+        const raw = localStorage.getItem(
+          SERVER_SEASON_RESUME_KEY
+        );
+
+        if (!raw) return null;
+
+        const parsed = JSON.parse(raw);
+
+        return parsed &&
+          typeof parsed.serverRunId === "string"
+            ? parsed
+            : null
+      } catch {
+        return null
+      }
+    }
+
+    function saveSecureSeasonResumeMarker(serverRunId) {
+      if (!serverRunId) return;
+
+      try {
+        localStorage.setItem(
+          SERVER_SEASON_RESUME_KEY,
+          JSON.stringify({
+            serverRunId,
+            clientRunId: gt && gt.runId || null,
+            updatedAt: new Date().toISOString()
+          })
+        )
+      } catch {}
+    }
+
+    function clearSecureSeasonResumeMarker() {
+      try {
+        localStorage.removeItem(
+          SERVER_SEASON_RESUME_KEY
+        )
+      } catch {}
+    }
+
+    function useSecureServerSeason() {
+      return !!(
+        SERVER_SEASON_TEST_ENABLED &&
+        gt &&
+        gt.serverMode &&
+        gt.serverShadow &&
+        gt.serverShadow.serverRunId &&
+        !gt.isDaily
+      )
+    }
+
+    function setSecureSeasonBusy(isBusy, label = "") {
+      if (!Ct) return;
+
+      Ct.serverActionPending = !!isBusy;
+
+      xt("nextMdBtn").disabled = !!isBusy;
+      xt("skipEndBtn").disabled = !!isBusy;
+
+      xt("nextMdBtn").textContent =
+        label || "Play Next Game"
+    }
+
+    function serverTableToLocalTable(rows) {
+      const table = {};
+
+      for (const row of Array.isArray(rows) ? rows : []) {
+        table[row.id] = {
+          p: +row.p || 0,
+          w: +row.w || 0,
+          d: +row.d || 0,
+          l: +row.l || 0,
+          gf: +row.gf || 0,
+          ga: +row.ga || 0,
+          cs: +row.cs || 0
+        }
+      }
+
+      return table
+    }
+
+    function safeServerMatchdayToLocal(matchday) {
+      if (
+        !matchday ||
+        !Array.isArray(matchday.matches)
+      ) return null;
+
+      return matchday.matches.map(match => ({
+        h: match.homeId,
+        a: match.awayId,
+        score: [
+          +match.homeGoals || 0,
+          +match.awayGoals || 0
+        ]
+      }))
+    }
+
+    function initializeSecureSeasonScreen(state) {
+      Ct = {
+        serverMode: !0,
+        serverRunId:
+          gt.serverShadow.serverRunId,
+        serverActionPending: !1,
+        serverFinalResult:
+          state && state.result || null,
+        replaced:
+          state && state.replacedClub || "—",
+        eff: x(),
+        fixtures: null,
+        plannedResults: Array(34),
+        generationMeta: {
+          secureServer: !0
+        },
+        md: +(
+          state &&
+          state.currentMatchday
+        ) || 0,
+        done:
+          state &&
+          "completed" === state.status,
+        table: serverTableToLocalTable(
+          state && state.table
+        ),
+        pstats: Object.fromEntries(
+          gt.slots.map(slot => [
+            slot.player.card_id,
+            {
+              g: 0,
+              a: 0,
+              cs: 0,
+              rsum: 0,
+              apps: 0
+            }
+          ])
+        ),
+        myMatches: [],
+        lastRatings: null,
+        savedRun: null
+      };
+
+      xt("replacedClub").textContent = Ct.replaced;
+      xt("mdNow").textContent = String(Ct.md);
+      xt("seasonYou").textContent = Jt();
+      xt("feed").innerHTML = "";
+      xt("latestPanel").style.display = "none";
+      xt("finalBand").classList.remove("on");
+      xt("endBlock").classList.remove("on");
+      xt("finalScorePanel").style.display = "none";
+      xt("nextMdBtn").style.display = "inline-block";
+      xt("skipEndBtn").style.display = "inline-block";
+      xt("skipEndBtn").textContent = "Skip To End";
+      xt("restartCtlBtn").style.display = "none";
+      setSecureSeasonBusy(!1);
+
+      _();
+      tt();
+      n("scr-season");
+
+      saveSecureSeasonResumeMarker(
+        Ct.serverRunId
+      );
+
+      if (
+        Ct.md > 0 &&
+        state.latestMatchday
+      ) {
+        const localMatches =
+          safeServerMatchdayToLocal(
+            state.latestMatchday
+          );
+
+        if (localMatches) {
+          const userMatch = localMatches.find(
+            match =>
+              match.h === Lt ||
+              match.a === Lt
+          );
+
+          if (userMatch) {
+            const isHome = userMatch.h === Lt,
+              gf = isHome
+                ? userMatch.score[0]
+                : userMatch.score[1],
+              ga = isHome
+                ? userMatch.score[1]
+                : userMatch.score[0];
+
+            Ct.myMatches.push({
+              md: Ct.md,
+              home: isHome,
+              opp: isHome
+                ? userMatch.a
+                : userMatch.h,
+              gf,
+              ga
+            });
+
+            xt("latestPanel").style.display =
+              "block";
+            xt("latestTag").textContent =
+              `Matchday ${Ct.md} — restored result`;
+            xt("latestScore").innerHTML =
+              `<span>${Q(userMatch.h)}<\/span>` +
+              `<span class="sc">${userMatch.score[0]} – ${userMatch.score[1]}<\/span>` +
+              `<span>${Q(userMatch.a)}<\/span>`;
+            xt("latestRats").innerHTML =
+              '<span class="mrat good">Server verified<b>✓<\/b><\/span>'
+          }
+        }
+      }
+    }
+
+    async function startSecureServerSeason(
+      options = {}
+    ) {
+      if (!useSecureServerSeason()) {
+        B();
+        return
+      }
+
+      const isResume = !!options.resume;
+
+      F();
+      d("sumModal");
+      xt("startSimBtn").disabled = !0;
+      xt("startSimBtn").textContent =
+        isResume
+          ? "Restoring season…"
+          : "Preparing season…";
+
+      try {
+        await initializeOnlineBackend();
+
+        const { data, error } =
+          await onlineClient.functions.invoke(
+            "start-season",
+            {
+              body: {
+                runId:
+                  gt.serverShadow.serverRunId
+              }
+            }
+          );
+
+        if (error) throw error;
+
+        if (!data || !data.ok || !data.state) {
+          throw new Error(
+            data &&
+            data.errorCode ||
+            "START_SEASON_REJECTED"
+          )
+        }
+
+        initializeSecureSeasonScreen(
+          data.state
+        );
+
+        l(
+          isResume
+            ? "Secure season restored."
+            : "Secure season ready."
+        )
+      } catch (error) {
+        console.warn(
+          "Could not start secure season.",
+          error
+        );
+
+        setDraftBackendStatus(
+          "error",
+          "The secure season could not start. Check your connection and try again."
+        );
+
+        r("sumModal")
+      } finally {
+        xt("startSimBtn").disabled = !1;
+        xt("startSimBtn").textContent =
+          "Start Simulation"
+      }
+    }
+
+    async function finishSecureServerSeason() {
+      const { data, error } =
+        await onlineClient.functions.invoke(
+          "finish-season",
+          {
+            body: {
+              runId: Ct.serverRunId
+            }
+          }
+        );
+
+      if (error) throw error;
+
+      if (!data || !data.ok || !data.state) {
+        throw new Error(
+          data &&
+          data.errorCode ||
+          "FINISH_SEASON_REJECTED"
+        )
+      }
+
+      Ct.serverFinalResult =
+        data.state.result || null;
+
+      return data.state
+    }
+
+    async function revealSecureServerMatchday(
+      openLatest = !0,
+      fromSkip = !1
+    ) {
+      if (
+        !Ct ||
+        !Ct.serverMode ||
+        Ct.done ||
+        Ct.serverActionPending
+      ) return !1;
+
+      const expectedMatchday = Ct.md;
+
+      setSecureSeasonBusy(
+        !0,
+        fromSkip
+          ? `Skipping… ${expectedMatchday + 1}/34`
+          : "Playing…"
+      );
+
+      try {
+        await initializeOnlineBackend();
+
+        const { data, error } =
+          await onlineClient.functions.invoke(
+            "reveal-matchday",
+            {
+              body: {
+                runId: Ct.serverRunId,
+                expectedMatchday
+              }
+            }
+          );
+
+        if (error) throw error;
+
+        if (!data || !data.ok || !data.state) {
+          throw new Error(
+            data &&
+            data.errorCode ||
+            "REVEAL_MATCHDAY_REJECTED"
+          )
+        }
+
+        const serverMatchday =
+            +data.state.currentMatchday || 0;
+
+        if (serverMatchday <= Ct.md) {
+          return !0
+        }
+
+        const localMatches =
+          safeServerMatchdayToLocal(
+            data.state.latestMatchday
+          );
+
+        if (!localMatches) {
+          throw new Error(
+            "MATCHDAY_PAYLOAD_MISSING"
+          )
+        }
+
+        if (34 === serverMatchday) {
+          await finishSecureServerSeason()
+        }
+
+        Ct.plannedResults[Ct.md] =
+          localMatches.map(match => ({
+            h: match.h,
+            a: match.a,
+            score: [
+              match.score[0],
+              match.score[1]
+            ]
+          }));
+
+        A(openLatest);
+
+        if (Ct.done) {
+          clearSecureSeasonResumeMarker()
+        }
+
+        return !0
+      } catch (error) {
+        console.warn(
+          "Could not reveal secure matchday.",
+          error
+        );
+
+        setDraftBackendStatus(
+          "error",
+          "The next matchday could not be loaded. Your season is safely saved."
+        );
+
+        return !1
+      } finally {
+        if (Ct && !Ct.done) {
+          setSecureSeasonBusy(!1)
+        }
+      }
+    }
+
+    async function skipSecureServerSeason() {
+      if (
+        !Ct ||
+        !Ct.serverMode ||
+        Ct.done ||
+        Ct.serverActionPending
+      ) return;
+
+      xt("skipEndBtn").textContent =
+        "Skipping…";
+
+      while (
+        Ct &&
+        Ct.serverMode &&
+        !Ct.done &&
+        Ct.md < 34
+      ) {
+        const worked =
+          await revealSecureServerMatchday(
+            !1,
+            !0
+          );
+
+        if (!worked) break
+      }
+
+      if (Ct && !Ct.done) {
+        xt("skipEndBtn").textContent =
+          "Skip To End";
+        setSecureSeasonBusy(!1)
+      }
+    }
+
+    function startSeasonFlow() {
+      return useSecureServerSeason()
+        ? startSecureServerSeason()
+        : B()
+    }
+
+    function playNextSeasonFlow() {
+      return Ct && Ct.serverMode
+        ? revealSecureServerMatchday(!0)
+        : A(!0)
+    }
+
+    function skipSeasonFlow() {
+      if (Ct && Ct.serverMode) {
+        skipSecureServerSeason();
+        return
+      }
+
+      if (Ct) {
+        for (; !Ct.done && Ct.md < 34;) {
+          A(!1)
+        }
+      }
+    }
+
+    async function tryResumeSecureSeason() {
+      if (
+        !SERVER_SEASON_TEST_ENABLED ||
+        !DRAFT_SERVER_MODE_ENABLED
+      ) return !1;
+
+      const marker =
+        readSecureSeasonResumeMarker();
+
+      if (
+        !marker ||
+        !marker.serverRunId
+      ) return !1;
+
+      try {
+        await initializeOnlineBackend();
+
+        const { data, error } =
+          await onlineClient.functions.invoke(
+            "resume-draft",
+            {
+              body: {
+                runId: marker.serverRunId
+              }
+            }
+          );
+
+        if (error) throw error;
+
+        if (!data || !data.ok || !data.state) {
+          clearSecureSeasonResumeMarker();
+          return !1
+        }
+
+        pendingSecureSeasonResume = !0;
+        rebuildSecureDraftFromServerState(
+          data.state
+        );
+
+        return !0
+      } catch (error) {
+        console.warn(
+          "Could not restore secure season.",
+          error
+        );
+
+        clearSecureSeasonResumeMarker();
+        pendingSecureSeasonResume = !1;
+        return !1
+      }
     }
 
     function B() {
@@ -5254,12 +5857,22 @@ async function __inflate(t) {
     xt("resumeSavedDraftBtn").addEventListener("click", resumeChosenSecureDraft);
     xt("startNewDraftBtn").addEventListener("click", cancelSavedDraftAndStartNew);
     xt("refreshGlobalLeaderboardBtn").addEventListener("click", renderGlobalLeaderboard);
+    if (SERVER_SEASON_TEST_ENABLED) {
+      document.body.classList.add("secure-season-test");
+      console.info("SPL Draft Phase 4 secure server season test is ENABLED.")
+    }
     if (DRAFT_SHADOW_TEST_ENABLED) console.info("SPL Draft private-backend shadow test is ENABLED.");
     if (DRAFT_SERVER_MODE_ENABLED) console.info("SPL Draft secure server drafting is active.");
     initializeOnlineBackend().then(async () => {
       renderGlobalLeaderboard();
+
       if (DRAFT_SERVER_MODE_ENABLED) {
-        await tryResumeSecureDraft()
+        const resumedSeason =
+          await tryResumeSecureSeason();
+
+        if (!resumedSeason) {
+          await tryResumeSecureDraft()
+        }
       }
     }).catch(() => {});
     xt("exportRecordsBtn").addEventListener("click", exportLocalProfile);
@@ -5281,12 +5894,9 @@ async function __inflate(t) {
     initializeBrowserBackNavigation();
     xt("homeBtn").addEventListener("click", t => m("Return home?", _t, "Return Home", b, t.currentTarget)), xt("draftRestartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartRunBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("scoreRestartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartCtlBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("navCancel").addEventListener("click", () => W(!1)), xt("navConfirm").addEventListener("click", () => W(!0)), xt("navModal").addEventListener("keydown", t => {
       "Escape" === t.key && W(!1)
-    }), xt("rollBtn").addEventListener("click", () => z(!1)), xt("skipBtn").addEventListener("click", () => z(!0)), document.getElementById("serverRollTestBtn").addEventListener("click", runServerRouletteShadowTest), document.getElementById("serverSkipTestBtn").addEventListener("click", runServerSkipShadowTest), document.getElementById("serverSelectTestBtn").addEventListener("click", runServerSelectionShadowTest), xt("startSimBtn").addEventListener("click", B), xt("editPosBtn").addEventListener("click", () => {
+    }), xt("rollBtn").addEventListener("click", () => z(!1)), xt("skipBtn").addEventListener("click", () => z(!0)), document.getElementById("serverRollTestBtn").addEventListener("click", runServerRouletteShadowTest), document.getElementById("serverSkipTestBtn").addEventListener("click", runServerSkipShadowTest), document.getElementById("serverSelectTestBtn").addEventListener("click", runServerSelectionShadowTest), xt("startSimBtn").addEventListener("click", startSeasonFlow), xt("editPosBtn").addEventListener("click", () => {
       F(), d("sumModal"), xt("openSummaryBtn").style.display = "inline-block"
-    }), xt("openSummaryBtn").addEventListener("click", g), xt("swapCancel").addEventListener("click", () => d("swapModal")), xt("nextMdBtn").addEventListener("click", () => A(!0)), xt("skipEndBtn").addEventListener("click", function() {
-      if (Ct)
-        for (; !Ct.done && Ct.md < 34;) A(!1)
-    })
+    }), xt("openSummaryBtn").addEventListener("click", g), xt("swapCancel").addEventListener("click", () => d("swapModal")), xt("nextMdBtn").addEventListener("click", playNextSeasonFlow), xt("skipEndBtn").addEventListener("click", skipSeasonFlow)
   } catch (rs) {
     console.error(rs), document.body.innerHTML = '<div style="font-family:system-ui;color:#EDF3EC;background:#0A1611;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:30px;text-align:center">Could not start the game \u2014 please update your browser and reload.<\/div>'
   }
