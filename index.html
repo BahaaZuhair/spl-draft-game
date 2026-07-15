@@ -1394,6 +1394,8 @@ async function __inflate(t) {
       DRAFT_SHADOW_TEST_ENABLED = !1,
       DRAFT_SERVER_MODE_ENABLED = !0,
       SERVER_SEASON_TEST_ENABLED = !0,
+      SERVER_PLAYER_STATS_TEST_ENABLED =
+        new URLSearchParams(window.location.search).get("serverPlayerStats") === "1",
       SERVER_DRAFT_RESUME_KEY = "spl_draft_secure_run_v1",
       SERVER_SEASON_RESUME_KEY = "spl_draft_secure_season_v1",
       RUN_HISTORY_LIMIT = 100,
@@ -4907,6 +4909,126 @@ async function __inflate(t) {
       }))
     }
 
+    function applyTrustedPlayerStatsState(state) {
+      if (
+        !SERVER_PLAYER_STATS_TEST_ENABLED ||
+        !Ct ||
+        !Ct.serverMode ||
+        !state
+      ) return;
+
+      const cumulativePlayers =
+        state.playerStats &&
+        Array.isArray(state.playerStats.players)
+          ? state.playerStats.players
+          : [];
+
+      for (const player of cumulativePlayers) {
+        const cardId = player.cardId,
+          current = Ct.pstats[cardId];
+
+        if (!current) continue;
+
+        current.g = +player.goals || 0;
+        current.a = +player.assists || 0;
+        current.cs = +player.cleanSheets || 0;
+        current.rsum = +player.ratingSum || 0;
+        current.apps = +player.apps || 0
+      }
+
+      Ct.serverLatestPlayerDetails =
+        state.latestPlayerDetails &&
+        Array.isArray(
+          state.latestPlayerDetails.players
+        )
+          ? state.latestPlayerDetails
+          : null
+    }
+
+    function trustedLatestRatings() {
+      if (
+        !SERVER_PLAYER_STATS_TEST_ENABLED ||
+        !Ct ||
+        !Ct.serverMode ||
+        !Ct.serverLatestPlayerDetails
+      ) return null;
+
+      const details =
+          Ct.serverLatestPlayerDetails,
+        motmCardId =
+          details.manOfMatch &&
+          details.manOfMatch.cardId || null;
+
+      return details.players
+        .map(player => {
+          const slot =
+            gt.slots.find(
+              slot =>
+                slot.player.card_id ===
+                  player.cardId
+            ) ||
+            gt.slots[
+              +player.slotIndex || 0
+            ];
+
+          if (!slot) return null;
+
+          return {
+            s: slot,
+            r: +player.rating || 0,
+            g: +player.goals || 0,
+            a: +player.assists || 0,
+            cs: player.cleanSheet ? 1 : 0,
+            motm:
+              motmCardId === player.cardId
+          }
+        })
+        .filter(Boolean)
+    }
+
+    function renderLatestPlayerRatings(ratings) {
+      return (Array.isArray(ratings) ? ratings : [])
+        .slice()
+        .sort((left, right) =>
+          right.r - left.r
+        )
+        .map(item => {
+          const extras = [
+            item.g
+              ? `${item.g}G`
+              : "",
+            item.a
+              ? `${item.a}A`
+              : "",
+            item.cs
+              ? "CS"
+              : "",
+            item.motm
+              ? "MOTM"
+              : ""
+          ].filter(Boolean);
+
+          return `<span class="mrat ${
+            item.r >= 7.5
+              ? "good"
+              : item.r < 5.5
+                ? "bad"
+                : ""
+          }">${
+            item.s.code
+          } ${
+            item.s.player.name
+              .split(" ")
+              .slice(-1)[0]
+          }${
+            extras.length
+              ? ` · ${extras.join(" · ")}`
+              : ""
+          }<b>${item.r.toFixed(1)}<\/b><\/span>`
+        })
+        .join("")
+    }
+
     function initializeSecureSeasonScreen(state) {
       Ct = {
         serverMode: !0,
@@ -4947,8 +5069,11 @@ async function __inflate(t) {
         ),
         myMatches: [],
         lastRatings: null,
+        serverLatestPlayerDetails: null,
         savedRun: null
       };
+
+      applyTrustedPlayerStatsState(state);
 
       xt("replacedClub").textContent = Ct.replaced;
       xt("mdNow").textContent = String(Ct.md);
@@ -5015,8 +5140,16 @@ async function __inflate(t) {
               `<span>${Q(userMatch.h)}<\/span>` +
               `<span class="sc">${userMatch.score[0]} – ${userMatch.score[1]}<\/span>` +
               `<span>${Q(userMatch.a)}<\/span>`;
+            Ct.lastRatings =
+              trustedLatestRatings();
+
             xt("latestRats").innerHTML =
-              '<span class="mrat good">Server verified<b>✓<\/b><\/span>'
+              Ct.lastRatings &&
+              Ct.lastRatings.length
+                ? renderLatestPlayerRatings(
+                    Ct.lastRatings
+                  )
+                : '<span class="mrat good">Server verified<b>✓<\/b><\/span>'
           }
         }
       }
@@ -5113,6 +5246,10 @@ async function __inflate(t) {
         )
       }
 
+      applyTrustedPlayerStatsState(
+        data.state
+      );
+
       Ct.serverFinalResult =
         data.state.result || null;
 
@@ -5162,6 +5299,10 @@ async function __inflate(t) {
             "REVEAL_MATCHDAY_REJECTED"
           )
         }
+
+        applyTrustedPlayerStatsState(
+          data.state
+        );
 
         const serverMatchday =
             +data.state.currentMatchday || 0;
@@ -5471,7 +5612,9 @@ async function __inflate(t) {
         l = n.h === Lt,
         r = l ? n.score[0] : n.score[1],
         d = l ? n.score[1] : n.score[0];
-      Ct.lastRatings = function(t, s) {
+      Ct.lastRatings =
+        trustedLatestRatings() ||
+        function(t, s) {
           const a = Object.fromEntries(gt.slots.map(t => [t.player.card_id, {
               g: 0,
               a: 0
@@ -5533,7 +5676,7 @@ async function __inflate(t) {
           i.querySelectorAll(".md.open").forEach(t => t.classList.remove("open")), i.prepend(o)
         }(a, e, t),
         function(t) {
-          xt("latestPanel").style.display = "block", xt("latestTag").textContent = `Matchday ${Ct.md} \u2014 latest result`, xt("latestScore").innerHTML = `<span>${Q(t.h)}<\/span><span class="sc">${t.score[0]} \u2013 ${t.score[1]}<\/span><span>${Q(t.a)}<\/span>`, xt("latestRats").innerHTML = Ct.lastRatings.slice().sort((t, s) => s.r - t.r).map(t => `<span class="mrat ${t.r>=7.5?"good":t.r<5.5?"bad":""}">${t.s.code} ${t.s.player.name.split(" ").slice(-1)[0]}<b>${t.r.toFixed(1)}<\/b><\/span>`).join("")
+          xt("latestPanel").style.display = "block", xt("latestTag").textContent = `Matchday ${Ct.md} \u2014 latest result`, xt("latestScore").innerHTML = `<span>${Q(t.h)}<\/span><span class="sc">${t.score[0]} \u2013 ${t.score[1]}<\/span><span>${Q(t.a)}<\/span>`, xt("latestRats").innerHTML = renderLatestPlayerRatings(Ct.lastRatings)
         }(n), xt("mdNow").textContent = Ct.md, _(), tt(), Ct.md >= 34 && function() {
           Ct.done = !0, xt("nextMdBtn").style.display = "none", xt("skipEndBtn").style.display = "none", xt("restartCtlBtn").style.display = "inline-block";
           const t = _(),
@@ -5944,6 +6087,9 @@ async function __inflate(t) {
     xt("refreshGlobalLeaderboardBtn").addEventListener("click", renderGlobalLeaderboard);
     if (SERVER_SEASON_TEST_ENABLED) {
       console.info("SPL Draft secure server season simulation is ENABLED.")
+    }
+    if (SERVER_PLAYER_STATS_TEST_ENABLED) {
+      console.info("SPL Draft trusted server player-stat display test is ENABLED.")
     }
     if (DRAFT_SHADOW_TEST_ENABLED) console.info("SPL Draft private-backend shadow test is ENABLED.");
     if (DRAFT_SERVER_MODE_ENABLED) console.info("SPL Draft secure server drafting is active.");
