@@ -96,6 +96,10 @@ header.top{display:flex;align-items:baseline;justify-content:space-between;gap:1
 .draft-backend-status.ok{border-color:rgba(90,200,120,.48);color:var(--green);background:rgba(90,200,120,.07)}
 .draft-backend-status.error{border-color:rgba(224,90,90,.48);color:var(--red);background:rgba(224,90,90,.07)}
 .draft-backend-status.testing{border-color:rgba(232,185,75,.42);color:var(--gold);background:rgba(232,185,75,.07)}
+.draft-backend-tools{display:none;gap:8px;align-items:center;flex-wrap:wrap;margin:-6px 0 14px}
+.draft-backend-tools.on{display:flex}
+.draft-backend-tools .btn{padding:8px 12px;font-size:12px}
+.draft-backend-details{font-size:12px;color:var(--muted);line-height:1.4}
 .pick-no{font-family:var(--disp);font-size:20px;letter-spacing:.05em}
 .pick-no span{color:var(--gold)}
 .rate-live{font-size:13px;color:var(--sand)}
@@ -617,6 +621,11 @@ table.lg tr:nth-child(-n+3) td.pos{color:var(--gold);font-weight:700}
       <div class="rate-live">Squad rating so far <b id="liveRate">—</b></div>
     </div>
     <div id="draftBackendStatus" class="draft-backend-status" role="status" aria-live="polite"></div>
+    <div id="draftBackendTools" class="draft-backend-tools">
+      <button class="btn ghost" id="serverRollTestBtn" type="button" disabled>Test Server Roll</button>
+      <button class="btn ghost" id="serverSkipTestBtn" type="button" disabled>Test Server Skip</button>
+      <span id="draftBackendDetails" class="draft-backend-details"></span>
+    </div>
     <div class="draft">
       <div class="pitch" id="pitch">
         <svg class="lines" viewBox="0 0 100 139" preserveAspectRatio="none">
@@ -1612,9 +1621,11 @@ async function __inflate(t) {
             serverState: data.state
           });
           setDraftBackendStatus("error", `Private backend mismatch: ${issues.join(", ")}`)
+          setDraftBackendTools(!1)
         } else {
           console.info("start-draft shadow verification passed", data.state);
           setDraftBackendStatus("ok", "✓ Private backend verified: authenticated run, 11 slots, formation, mode and skips all match.")
+          setDraftBackendTools(!0, "Ready to test the secure server roulette.")
         }
       } catch (error) {
         localRun.serverShadow = {
@@ -1624,6 +1635,202 @@ async function __inflate(t) {
         };
         console.warn("start-draft shadow test failed; local game continues normally.", error);
         setDraftBackendStatus("error", "Private backend test failed. The local draft still works; check the browser console and Edge Function logs.")
+        setDraftBackendTools(!1)
+      }
+    }
+
+    function setDraftBackendTools(visible, details = "") {
+      const tools = document.getElementById("draftBackendTools"),
+        rollButton = document.getElementById("serverRollTestBtn"),
+        skipButton = document.getElementById("serverSkipTestBtn"),
+        detailNode = document.getElementById("draftBackendDetails");
+      if (!tools || !rollButton || !skipButton || !detailNode) return;
+      tools.classList.toggle("on", !!visible);
+      detailNode.textContent = details;
+      const ready = !!(
+        visible &&
+        gt &&
+        gt.serverShadow &&
+        "verified" === gt.serverShadow.status &&
+        gt.serverShadow.serverRunId
+      );
+      rollButton.disabled = !ready;
+      const currentOffer = ready && gt.serverShadow.currentOffer;
+      skipButton.disabled = !(
+        ready &&
+        currentOffer &&
+        +currentOffer.skipsLeft > 0
+      )
+    }
+
+    function validateServerRouletteOffer(offer, expectedRunId) {
+      const issues = [];
+      if (!offer || "object" !== typeof offer) return ["Missing server offer"];
+      if (!offer.offerId) issues.push("Missing offer ID");
+      if (offer.runId !== expectedRunId) issues.push("Run ID mismatch");
+      if (+offer.pickNo !== 1) issues.push("Expected pick 1");
+      if (!offer.sourceClub) issues.push("Missing source club");
+      if (!offer.sourceSeason) issues.push("Missing source season");
+      const cards = Array.isArray(offer.cards) ? offer.cards : [];
+      if (!cards.length) issues.push("No cards returned");
+      if (cards.length > 100) issues.push("Unexpectedly large roster");
+      const cardIds = new Set,
+        playerIds = new Set,
+        openSlots = gt ? gt.slots.filter(slot => !slot.player) : [];
+      let anyCardFits = !1;
+      for (const card of cards) {
+        if (!card || !card.card_id || !card.player_id) {
+          issues.push("Malformed card in offer");
+          continue
+        }
+        if (cardIds.has(card.card_id)) issues.push("Duplicate card ID in offer");
+        if (playerIds.has(card.player_id)) issues.push("Duplicate player ID in offer");
+        cardIds.add(card.card_id);
+        playerIds.add(card.player_id);
+        if (openSlots.some(slot => f(card, slot.code))) anyCardFits = !0
+      }
+      if (cards.length && !anyCardFits) issues.push("Offer cannot fill an open slot");
+      const fitting = Array.isArray(offer.fittingSlotIndexes)
+        ? offer.fittingSlotIndexes.map(Number)
+        : [];
+      if (!fitting.length) issues.push("Missing fitting slot indexes");
+      if (fitting.some(index => !Number.isInteger(index) || index < 0 || index > 10)) {
+        issues.push("Invalid fitting slot index")
+      }
+      return issues
+    }
+
+    async function invokeServerRoll(useSkip) {
+      if (
+        !DRAFT_SHADOW_TEST_ENABLED ||
+        !gt ||
+        !gt.serverShadow ||
+        "verified" !== gt.serverShadow.status ||
+        !gt.serverShadow.serverRunId
+      ) {
+        throw new Error("Server draft run is not ready")
+      }
+      await initializeOnlineBackend();
+      const { data, error } = await onlineClient.functions.invoke("roll-draft", {
+        body: {
+          runId: gt.serverShadow.serverRunId,
+          useSkip: !!useSkip
+        }
+      });
+      if (error) throw error;
+      if (!data || !data.ok || !data.offer) {
+        throw new Error(data && data.errorCode || "Missing server roulette offer")
+      }
+      return data.offer
+    }
+
+    async function runServerRouletteShadowTest() {
+      const rollButton = document.getElementById("serverRollTestBtn"),
+        skipButton = document.getElementById("serverSkipTestBtn");
+      if (rollButton) rollButton.disabled = !0;
+      if (skipButton) skipButton.disabled = !0;
+      setDraftBackendStatus("testing", "Private backend test: requesting a secure server roulette offer…");
+      try {
+        const firstOffer = await invokeServerRoll(!1),
+          firstIssues = validateServerRouletteOffer(
+            firstOffer,
+            gt.serverShadow.serverRunId
+          );
+        if (firstIssues.length) throw new Error(firstIssues.join(", "));
+
+        const repeatedOffer = await invokeServerRoll(!1);
+        if (repeatedOffer.offerId !== firstOffer.offerId) {
+          throw new Error("Repeated roll created a free reroll")
+        }
+
+        gt.serverShadow.currentOffer = firstOffer;
+        gt.serverShadow.rouletteStatus = "verified";
+        gt.serverShadow.rouletteCheckedAt = new Date().toISOString();
+
+        const cardCount = Array.isArray(firstOffer.cards)
+          ? firstOffer.cards.length
+          : 0;
+        const slotCount = Array.isArray(firstOffer.fittingSlotIndexes)
+          ? firstOffer.fittingSlotIndexes.length
+          : 0;
+
+        setDraftBackendStatus(
+          "ok",
+          `✓ Server roulette verified: ${firstOffer.sourceClub} ${firstOffer.sourceSeason}, ${cardCount} eligible cards, ${slotCount} fitting slots, no free reroll.`
+        );
+        setDraftBackendTools(
+          !0,
+          `Offer ${String(firstOffer.offerId).slice(0, 8)}… · ${firstOffer.skipsLeft} skips left`
+        );
+        console.info("roll-draft shadow verification passed", firstOffer)
+      } catch (error) {
+        console.warn("roll-draft shadow test failed.", error);
+        if (gt && gt.serverShadow) {
+          gt.serverShadow.rouletteStatus = "error";
+          gt.serverShadow.rouletteError = String(
+            error && error.message || error
+          ).slice(0, 180)
+        }
+        setDraftBackendStatus(
+          "error",
+          `Server roulette test failed: ${String(error && error.message || error)}`
+        );
+        setDraftBackendTools(!0, "The local roulette still works normally.")
+      } finally {
+        if (rollButton) rollButton.disabled = !1;
+        const offer = gt && gt.serverShadow && gt.serverShadow.currentOffer;
+        if (skipButton) skipButton.disabled = !(offer && +offer.skipsLeft > 0)
+      }
+    }
+
+    async function runServerSkipShadowTest() {
+      const rollButton = document.getElementById("serverRollTestBtn"),
+        skipButton = document.getElementById("serverSkipTestBtn"),
+        previous = gt && gt.serverShadow && gt.serverShadow.currentOffer;
+      if (!previous || +previous.skipsLeft <= 0) return;
+      if (rollButton) rollButton.disabled = !0;
+      if (skipButton) skipButton.disabled = !0;
+      setDraftBackendStatus("testing", "Private backend test: using one server-owned skip…");
+      try {
+        const nextOffer = await invokeServerRoll(!0),
+          issues = validateServerRouletteOffer(
+            nextOffer,
+            gt.serverShadow.serverRunId
+          );
+        if (issues.length) throw new Error(issues.join(", "));
+        if (nextOffer.offerId === previous.offerId) {
+          throw new Error("Skip did not replace the active offer")
+        }
+        if (+nextOffer.skipsLeft !== +previous.skipsLeft - 1) {
+          throw new Error("Server skip count did not decrease by one")
+        }
+
+        gt.serverShadow.currentOffer = nextOffer;
+        gt.serverShadow.skipStatus = "verified";
+        gt.serverShadow.skipCheckedAt = new Date().toISOString();
+
+        const cardCount = Array.isArray(nextOffer.cards)
+          ? nextOffer.cards.length
+          : 0;
+        setDraftBackendStatus(
+          "ok",
+          `✓ Server skip verified: new offer ${nextOffer.sourceClub} ${nextOffer.sourceSeason}, ${cardCount} eligible cards, ${nextOffer.skipsLeft} skips left.`
+        );
+        setDraftBackendTools(
+          !0,
+          `Offer ${String(nextOffer.offerId).slice(0, 8)}… · ${nextOffer.skipsLeft} skips left`
+        );
+        console.info("server skip shadow verification passed", nextOffer)
+      } catch (error) {
+        console.warn("server skip shadow test failed.", error);
+        setDraftBackendStatus(
+          "error",
+          `Server skip test failed: ${String(error && error.message || error)}`
+        )
+      } finally {
+        if (rollButton) rollButton.disabled = !1;
+        const offer = gt && gt.serverShadow && gt.serverShadow.currentOffer;
+        if (skipButton) skipButton.disabled = !(offer && +offer.skipsLeft > 0)
       }
     }
 
@@ -3675,6 +3882,7 @@ async function __inflate(t) {
         })
       } else {
         setDraftBackendStatus("", "")
+        setDraftBackendTools(!1)
       }
     }
 
@@ -3763,7 +3971,7 @@ async function __inflate(t) {
     initializeBrowserBackNavigation();
     xt("homeBtn").addEventListener("click", t => m("Return home?", _t, "Return Home", b, t.currentTarget)), xt("draftRestartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartRunBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("scoreRestartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartCtlBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("navCancel").addEventListener("click", () => W(!1)), xt("navConfirm").addEventListener("click", () => W(!0)), xt("navModal").addEventListener("keydown", t => {
       "Escape" === t.key && W(!1)
-    }), xt("rollBtn").addEventListener("click", () => z(!1)), xt("skipBtn").addEventListener("click", () => z(!0)), xt("startSimBtn").addEventListener("click", B), xt("editPosBtn").addEventListener("click", () => {
+    }), xt("rollBtn").addEventListener("click", () => z(!1)), xt("skipBtn").addEventListener("click", () => z(!0)), document.getElementById("serverRollTestBtn").addEventListener("click", runServerRouletteShadowTest), document.getElementById("serverSkipTestBtn").addEventListener("click", runServerSkipShadowTest), xt("startSimBtn").addEventListener("click", B), xt("editPosBtn").addEventListener("click", () => {
       F(), d("sumModal"), xt("openSummaryBtn").style.display = "inline-block"
     }), xt("openSummaryBtn").addEventListener("click", g), xt("swapCancel").addEventListener("click", () => d("swapModal")), xt("nextMdBtn").addEventListener("click", () => A(!0)), xt("skipEndBtn").addEventListener("click", function() {
       if (Ct)
