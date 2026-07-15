@@ -1338,6 +1338,7 @@ async function __inflate(t) {
       SUPABASE_PUBLISHABLE_KEY = "sb_publishable_-ZSGulpdWPsmHeX4_DY49Q_knHYIpSf",
       DRAFT_SHADOW_TEST_ENABLED = new URLSearchParams(window.location.search).get("backendTest") === "1",
       DRAFT_SERVER_MODE_ENABLED = new URLSearchParams(window.location.search).get("serverDraft") === "1",
+      SERVER_DRAFT_RESUME_KEY = "spl_draft_secure_run_v1",
       RUN_HISTORY_LIMIT = 100,
       RUN_SCORE_CONFIG = {
         pointsValue: 100,
@@ -1593,6 +1594,42 @@ async function __inflate(t) {
       return issues
     }
 
+    function saveSecureDraftResumeMarker(serverRunId) {
+      if (!serverRunId) return;
+      try {
+        localStorage.setItem(
+          SERVER_DRAFT_RESUME_KEY,
+          JSON.stringify({
+            serverRunId,
+            savedAt: new Date().toISOString()
+          })
+        )
+      } catch {}
+    }
+
+    function clearSecureDraftResumeMarker() {
+      try {
+        localStorage.removeItem(SERVER_DRAFT_RESUME_KEY)
+      } catch {}
+    }
+
+    function readSecureDraftResumeMarker() {
+      try {
+        const raw = localStorage.getItem(
+          SERVER_DRAFT_RESUME_KEY
+        );
+        if (!raw) return null;
+
+        const parsed = JSON.parse(raw);
+        return parsed &&
+          "string" === typeof parsed.serverRunId
+          ? parsed
+          : null
+      } catch {
+        return null
+      }
+    }
+
     async function runStartDraftShadowTest(localRun, expected) {
       if (
         (!DRAFT_SHADOW_TEST_ENABLED && !DRAFT_SERVER_MODE_ENABLED) ||
@@ -1646,6 +1683,7 @@ async function __inflate(t) {
           status: issues.length ? "mismatch" : "verified",
           serverRunId: data.state.runId || null,
           checkedAt: new Date().toISOString(),
+          currentOffer: data.state.activeOffer || null,
           issues
         };
 
@@ -1678,6 +1716,8 @@ async function __inflate(t) {
           localRun.pick = +data.state.currentPick || 1;
           localRun.skipsInitial = +data.state.skipsInitial;
           localRun.skipsLeft = +data.state.skipsLeft;
+
+          saveSecureDraftResumeMarker(data.state.runId);
 
           setDraftBackendStatus(
             "ok",
@@ -2050,7 +2090,9 @@ async function __inflate(t) {
         )
       }
 
-      return data.result
+      return data.result && data.result.selection
+        ? data.result.selection
+        : data.result
     }
 
     async function verifySelectionReplayRejected(candidate, offer) {
@@ -3251,6 +3293,103 @@ async function __inflate(t) {
       }
     }
 
+    function showSecureServerOffer(
+      offer,
+      {
+        animate = !0,
+        prefetched = !1,
+        resumed = !1
+      } = {}
+    ) {
+      if (!gt || !gt.serverMode || !offer) return;
+
+      const selectedPool = serverOfferToLocalRoll(offer);
+
+      if (!selectedPool.pool.length) {
+        throw new Error("Server returned an empty roster")
+      }
+
+      gt.skipsLeft = +offer.skipsLeft;
+      gt.serverShadow.currentOffer = offer;
+      gt.serverShadow.prefetchedOffer = null;
+
+      const finishDisplay = () => {
+        if (!gt || !gt.serverMode) return;
+
+        gt.rolling = !1;
+        gt.serverActionPending = !1;
+        gt.roll = selectedPool;
+
+        X(gt.skipsLeft > 0);
+
+        const clubStyle = rt[selectedPool.club] || {
+          color: "#888"
+        };
+
+        xt("rosterPanel").style.display = "block";
+        xt("clubDot").style.background = clubStyle.color;
+        xt("clubName").textContent = ot(selectedPool.club);
+        xt("clubSeason").textContent =
+          "alltime" === gt.mode
+            ? selectedPool.season + " · PEAK CARDS"
+            : selectedPool.season;
+        xt("clubNameAr").textContent =
+          selectedPool.sourceClubAr || "";
+
+        D();
+
+        setDraftBackendStatus(
+          "ok",
+          `${resumed ? "✓ Resumed" : "✓ Secure"} server offer ready: ${ot(
+            selectedPool.club
+          )} ${selectedPool.season} · ${
+            selectedPool.pool.length
+          } eligible cards · ${gt.skipsLeft} skips left${
+            prefetched ? " · preloaded" : ""
+          }.`
+        )
+      };
+
+      if (!animate) {
+        finishDisplay();
+        return
+      }
+
+      const allClubNames = [
+          ...new Set(
+            Object.keys(ct).map(
+              key => ot(key.split("|")[0])
+            )
+          )
+        ],
+        clubStop = q(
+          xt("clubStrip"),
+          allClubNames.map(Z),
+          Z(ot(selectedPool.club))
+        ),
+        seasonStop = q(
+          xt("seasonStrip"),
+          nt.map(u),
+          u(selectedPool.season)
+        );
+
+      requestAnimationFrame(() => {
+        xt("clubStrip").style.transition =
+          "transform 1.05s cubic-bezier(.14,.84,.16,1)";
+        xt("seasonStrip").style.transition =
+          "transform 1.2s cubic-bezier(.14,.84,.16,1)";
+        xt("clubStrip").style.transform =
+          `translateY(${-(clubStop-1)*Rt}px)`;
+        xt("seasonStrip").style.transform =
+          `translateY(${-(seasonStop-1)*Rt}px)`
+      });
+
+      const token = It;
+      setTimeout(() => {
+        token === It && finishDisplay()
+      }, 1280)
+    }
+
     async function runServerDraftRoll(useSkip) {
       if (
         !gt ||
@@ -3266,11 +3405,46 @@ async function __inflate(t) {
 
       if (useSkip && gt.skipsLeft <= 0) return;
 
+      const prefetchedOffer =
+        !useSkip &&
+        gt.serverShadow.prefetchedOffer;
+
       gt.serverActionPending = !0;
       gt.rolling = !0;
       xt("rollBtn").disabled = !0;
       X(!1);
       xt("rosterPanel").style.display = "none";
+
+      if (prefetchedOffer) {
+        setDraftBackendStatus(
+          "testing",
+          "Secure server draft: opening the preloaded next offer…"
+        );
+
+        try {
+          showSecureServerOffer(
+            prefetchedOffer,
+            {
+              animate: !0,
+              prefetched: !0
+            }
+          )
+        } catch (error) {
+          gt.rolling = !1;
+          gt.serverActionPending = !1;
+          gt.serverShadow.prefetchedOffer = null;
+          xt("rollBtn").disabled = !1;
+
+          setDraftBackendStatus(
+            "error",
+            `Could not display the preloaded offer: ${String(
+              error && error.message || error
+            )}`
+          )
+        }
+
+        return
+      }
 
       setDraftBackendStatus(
         "testing",
@@ -3300,86 +3474,13 @@ async function __inflate(t) {
           )
         }
 
-        const offer = data.offer,
-          selectedPool = serverOfferToLocalRoll(offer);
-
-        if (!selectedPool.pool.length) {
-          throw new Error("Server returned an empty roster")
-        }
-
-        gt.skipsLeft = +offer.skipsLeft;
-        gt.serverShadow.currentOffer = offer;
-
-        const allClubNames = [
-            ...new Set(
-              Object.keys(ct).map(
-                key => ot(key.split("|")[0])
-              )
-            )
-          ],
-          clubStop = q(
-            xt("clubStrip"),
-            allClubNames.map(Z),
-            Z(ot(selectedPool.club))
-          ),
-          seasonStop = q(
-            xt("seasonStrip"),
-            nt.map(u),
-            u(selectedPool.season)
-          );
-
-        requestAnimationFrame(() => {
-          xt("clubStrip").style.transition =
-            "transform 2.4s cubic-bezier(.14,.84,.16,1)";
-          xt("seasonStrip").style.transition =
-            "transform 2.8s cubic-bezier(.14,.84,.16,1)";
-          xt("clubStrip").style.transform =
-            `translateY(${-(clubStop-1)*Rt}px)`;
-          xt("seasonStrip").style.transform =
-            `translateY(${-(seasonStop-1)*Rt}px)`
-        });
-
-        const token = It;
-
-        setTimeout(() => {
-          if (
-            token !== It ||
-            !gt ||
-            !gt.serverMode
-          ) return;
-
-          gt.rolling = !1;
-          gt.serverActionPending = !1;
-          gt.roll = selectedPool;
-
-          X(gt.skipsLeft > 0);
-
-          const clubStyle = rt[selectedPool.club] || {
-            color: "#888"
-          };
-
-          xt("rosterPanel").style.display = "block";
-          xt("clubDot").style.background = clubStyle.color;
-          xt("clubName").textContent =
-            ot(selectedPool.club);
-          xt("clubSeason").textContent =
-            "alltime" === gt.mode
-              ? selectedPool.season + " · PEAK CARDS"
-              : selectedPool.season;
-          xt("clubNameAr").textContent =
-            selectedPool.sourceClubAr || "";
-
-          D();
-
-          setDraftBackendStatus(
-            "ok",
-            `✓ Secure server offer ready: ${ot(
-              selectedPool.club
-            )} ${selectedPool.season} · ${
-              selectedPool.pool.length
-            } eligible cards · ${gt.skipsLeft} skips left.`
-          )
-        }, 2950)
+        showSecureServerOffer(
+          data.offer,
+          {
+            animate: !0,
+            prefetched: !1
+          }
+        )
       } catch (error) {
         gt.rolling = !1;
         gt.serverActionPending = !1;
@@ -3404,7 +3505,8 @@ async function __inflate(t) {
     function applyServerSelectionToLocalDraft(
       selectedCard,
       slotIndex,
-      serverState
+      serverState,
+      nextOffer = null
     ) {
       const card = {
         ...selectedCard,
@@ -3424,15 +3526,21 @@ async function __inflate(t) {
       gt.pick = +serverState.currentPick;
       gt.skipsLeft = +serverState.skipsLeft;
       gt.serverShadow.currentOffer = null;
+      gt.serverShadow.prefetchedOffer = nextOffer || null;
 
       xt("rosterPanel").style.display = "none";
       X(!1);
       U(slotIndex);
       H();
 
+      saveSecureDraftResumeMarker(
+        gt.serverShadow.serverRunId
+      );
+
       if ("squad_complete" === serverState.status) {
         gt.complete = !0;
         xt("rollBtn").disabled = !0;
+        clearSecureDraftResumeMarker();
 
         setDraftBackendStatus(
           "ok",
@@ -3444,13 +3552,15 @@ async function __inflate(t) {
         const token = It;
         setTimeout(() => {
           token === It && gt && g()
-        }, 650)
+        }, 450)
       } else {
         xt("rollBtn").disabled = !1;
 
         setDraftBackendStatus(
           "ok",
-          `✓ Secure selection stored. Server advanced to Pick ${gt.pick}.`
+          nextOffer
+            ? `✓ Secure selection stored. Pick ${gt.pick} is ready and the next offer is preloaded.`
+            : `✓ Secure selection stored. Server advanced to Pick ${gt.pick}.`
         )
       }
     }
@@ -3501,10 +3611,15 @@ async function __inflate(t) {
           )
         }
 
+        const payload = data.result,
+          selection = payload.selection || payload,
+          nextOffer = payload.nextOffer || null;
+
         applyServerSelectionToLocalDraft(
-          data.result.selectedCard,
-          +data.result.selectedSlotIndex,
-          data.result.state
+          selection.selectedCard,
+          +selection.selectedSlotIndex,
+          selection.state,
+          nextOffer
         )
       } catch (error) {
         console.warn(
@@ -3525,6 +3640,203 @@ async function __inflate(t) {
         X(gt.skipsLeft > 0)
       } finally {
         gt.serverActionPending = !1
+      }
+    }
+
+    function rebuildSecureDraftFromServerState(
+      state
+    ) {
+      if (
+        !state ||
+        !state.runId ||
+        !state.formationCode ||
+        !Xt[state.formationCode]
+      ) {
+        throw new Error("Invalid resumable server state")
+      }
+
+      It++;
+      F();
+
+      const formation = Xt[state.formationCode],
+        stateSlots = Array.isArray(state.slots)
+          ? state.slots
+          : [];
+
+      gt = {
+        runId: state.clientRunId ||
+          makeRunId("run"),
+        fkey: state.formationCode,
+        mode: state.draftMode,
+        skipsLeft: +state.skipsLeft,
+        skipsInitial: +state.skipsInitial,
+        slots: formation.slots.map(
+          ([code, x, y], index) => {
+            const saved = stateSlots.find(
+              slot => +slot.index === index
+            );
+            const savedCard =
+              saved && saved.card
+                ? {
+                    ...saved.card,
+                    rating: +saved.card.rating,
+                    eligible_slots: Array.isArray(
+                      saved.card.eligible_slots
+                    )
+                      ? saved.card.eligible_slots
+                      : []
+                  }
+                : null;
+
+            return {
+              idx: index,
+              code,
+              x,
+              y,
+              player: savedCard
+            }
+          }
+        ),
+        draftedCards: new Set,
+        draftedPlayers: new Set,
+        pick: +state.currentPick || 1,
+        roll: null,
+        pendingPlayer: null,
+        rolling: !1,
+        complete:
+          "squad_complete" === state.status,
+        isDaily: !1,
+        challenge: null,
+        dailyAttemptType: null,
+        dailyPlan: null,
+        dailyPickIndex: 0,
+        dailyChoiceIndex: 0,
+        random: null,
+        serverMode: !0,
+        serverActionPending: !1,
+        serverShadow: {
+          status: "verified",
+          serverRunId: state.runId,
+          checkedAt: new Date().toISOString(),
+          currentOffer: state.activeOffer || null,
+          prefetchedOffer: null,
+          resumed: !0
+        }
+      };
+
+      for (const slot of gt.slots) {
+        if (slot.player) {
+          gt.draftedCards.add(slot.player.card_id);
+          gt.draftedPlayers.add(slot.player.player_id)
+        }
+      }
+
+      if (state.teamName) {
+        xt("teamNameInput").value = state.teamName;
+        persistTeamName(state.teamName)
+      }
+
+      Kt = [];
+      xt("formName").textContent =
+        formation.name;
+      xt("openSummaryBtn").style.display =
+        "none";
+      xt("rosterPanel").style.display =
+        "none";
+
+      H();
+      U();
+      n("scr-draft");
+
+      saveSecureDraftResumeMarker(state.runId);
+
+      if (gt.complete) {
+        xt("rollBtn").disabled = !0;
+        X(!1);
+        clearSecureDraftResumeMarker();
+
+        setDraftBackendStatus(
+          "ok",
+          "✓ Secure completed squad restored from the private server."
+        );
+
+        setTimeout(() => {
+          gt && g()
+        }, 250);
+
+        return
+      }
+
+      xt("rollBtn").disabled = !1;
+
+      setDraftBackendStatus(
+        "ok",
+        `✓ Secure draft resumed: Pick ${gt.pick}, ${
+          gt.draftedCards.size
+        } players restored, ${gt.skipsLeft} skips left.`
+      );
+
+      if (state.activeOffer) {
+        showSecureServerOffer(
+          state.activeOffer,
+          {
+            animate: !1,
+            resumed: !0
+          }
+        )
+      } else {
+        X(!1)
+      }
+    }
+
+    async function tryResumeSecureDraft() {
+      if (!DRAFT_SERVER_MODE_ENABLED) return !1;
+
+      const marker = readSecureDraftResumeMarker();
+      if (!marker || !marker.serverRunId) return !1;
+
+      setDraftBackendStatus(
+        "testing",
+        "Secure server draft: restoring your saved private run…"
+      );
+
+      try {
+        await initializeOnlineBackend();
+
+        const { data, error } =
+          await onlineClient.functions.invoke(
+            "resume-draft",
+            {
+              body: {
+                runId: marker.serverRunId
+              }
+            }
+          );
+
+        if (error) throw error;
+        if (!data || !data.ok || !data.state) {
+          clearSecureDraftResumeMarker();
+          return !1
+        }
+
+        rebuildSecureDraftFromServerState(
+          data.state
+        );
+
+        console.info(
+          "Secure server draft resumed.",
+          data.state
+        );
+
+        return !0
+      } catch (error) {
+        console.warn(
+          "Could not resume secure server draft.",
+          error
+        );
+
+        clearSecureDraftResumeMarker();
+        return !1
       }
     }
 
@@ -4595,7 +4907,12 @@ async function __inflate(t) {
     xt("refreshGlobalLeaderboardBtn").addEventListener("click", renderGlobalLeaderboard);
     if (DRAFT_SHADOW_TEST_ENABLED) console.info("SPL Draft private-backend shadow test is ENABLED.");
     if (DRAFT_SERVER_MODE_ENABLED) console.info("SPL Draft SECURE SERVER DRAFT mode is ENABLED.");
-    initializeOnlineBackend().then(() => renderGlobalLeaderboard()).catch(() => {});
+    initializeOnlineBackend().then(async () => {
+      renderGlobalLeaderboard();
+      if (DRAFT_SERVER_MODE_ENABLED) {
+        await tryResumeSecureDraft()
+      }
+    }).catch(() => {});
     xt("exportRecordsBtn").addEventListener("click", exportLocalProfile);
     xt("importRecordsBtn").addEventListener("click", () => xt("importRecordsFile").click());
     xt("importRecordsFile").addEventListener("change", event => importLocalProfileFile(event.target.files && event.target.files[0]));
