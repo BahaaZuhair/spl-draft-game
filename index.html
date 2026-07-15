@@ -3375,9 +3375,9 @@ async function __inflate(t) {
 
       requestAnimationFrame(() => {
         xt("clubStrip").style.transition =
-          "transform 1.05s cubic-bezier(.14,.84,.16,1)";
+          "transform 2.4s cubic-bezier(.14,.84,.16,1)";
         xt("seasonStrip").style.transition =
-          "transform 1.2s cubic-bezier(.14,.84,.16,1)";
+          "transform 2.8s cubic-bezier(.14,.84,.16,1)";
         xt("clubStrip").style.transform =
           `translateY(${-(clubStop-1)*Rt}px)`;
         xt("seasonStrip").style.transform =
@@ -3387,7 +3387,7 @@ async function __inflate(t) {
       const token = It;
       setTimeout(() => {
         token === It && finishDisplay()
-      }, 1280)
+      }, 2950)
     }
 
     async function runServerDraftRoll(useSkip) {
@@ -3559,10 +3559,86 @@ async function __inflate(t) {
         setDraftBackendStatus(
           "ok",
           nextOffer
-            ? `✓ Secure selection stored. Pick ${gt.pick} is ready and the next offer is preloaded.`
+            ? `✓ Selection confirmed. Pick ${gt.pick} is ready.`
             : `✓ Secure selection stored. Server advanced to Pick ${gt.pick}.`
         )
       }
+    }
+
+    function applyOptimisticServerSelection(
+      card,
+      slotIndex
+    ) {
+      const normalizedCard = {
+        ...card,
+        rating: +card.rating,
+        eligible_slots: Array.isArray(card.eligible_slots)
+          ? card.eligible_slots
+          : []
+      };
+
+      const snapshot = {
+        slotIndex,
+        previousPlayer: gt.slots[slotIndex].player,
+        previousPick: gt.pick,
+        previousRoll: gt.roll,
+        previousCurrentOffer:
+          gt.serverShadow.currentOffer || null,
+        previousPrefetchedOffer:
+          gt.serverShadow.prefetchedOffer || null,
+        cardId: normalizedCard.card_id,
+        playerId: normalizedCard.player_id
+      };
+
+      gt.slots[slotIndex].player = normalizedCard;
+      gt.draftedCards.add(normalizedCard.card_id);
+      gt.draftedPlayers.add(normalizedCard.player_id);
+      gt.pendingPlayer = null;
+      gt.roll = null;
+      gt.pick = Math.min(12, +gt.pick + 1);
+      gt.serverShadow.currentOffer = null;
+
+      xt("rosterPanel").style.display = "none";
+      X(!1);
+      U(slotIndex);
+      H();
+
+      setDraftBackendStatus(
+        "testing",
+        `Confirming ${normalizedCard.name} with the secure server…`
+      );
+
+      return snapshot
+    }
+
+    function rollbackOptimisticServerSelection(
+      snapshot
+    ) {
+      if (!gt || !snapshot) return;
+
+      gt.slots[snapshot.slotIndex].player =
+        snapshot.previousPlayer || null;
+      gt.pick = snapshot.previousPick;
+      gt.roll = snapshot.previousRoll;
+      gt.serverShadow.currentOffer =
+        snapshot.previousCurrentOffer;
+      gt.serverShadow.prefetchedOffer =
+        snapshot.previousPrefetchedOffer;
+
+      gt.draftedCards.delete(snapshot.cardId);
+      gt.draftedPlayers.delete(snapshot.playerId);
+      gt.pendingPlayer = null;
+
+      U(snapshot.slotIndex);
+      H();
+
+      if (gt.roll) {
+        xt("rosterPanel").style.display = "block";
+        D()
+      }
+
+      X(gt.skipsLeft > 0);
+      xt("rollBtn").disabled = !1
     }
 
     async function runServerDraftSelection(
@@ -3577,15 +3653,15 @@ async function __inflate(t) {
         gt.serverActionPending
       ) return;
 
+      const activeOffer = gt.roll,
+        snapshot = applyOptimisticServerSelection(
+          card,
+          slotIndex
+        );
+
       gt.serverActionPending = !0;
-      gt.pendingPlayer = card;
       xt("rollBtn").disabled = !0;
       X(!1);
-
-      setDraftBackendStatus(
-        "testing",
-        `Secure server draft: validating ${card.name} for ${gt.slots[slotIndex].code}…`
-      );
 
       try {
         await initializeOnlineBackend();
@@ -3596,7 +3672,7 @@ async function __inflate(t) {
             {
               body: {
                 runId: gt.serverShadow.serverRunId,
-                offerId: gt.roll.offerId,
+                offerId: activeOffer.offerId,
                 cardId: card.card_id,
                 slotIndex
               }
@@ -3627,17 +3703,16 @@ async function __inflate(t) {
           error
         );
 
-        gt.pendingPlayer = null;
+        rollbackOptimisticServerSelection(
+          snapshot
+        );
 
         setDraftBackendStatus(
           "error",
-          `Secure selection failed: ${String(
+          `Secure selection failed and was rolled back: ${String(
             error && error.message || error
           )}`
-        );
-
-        D();
-        X(gt.skipsLeft > 0)
+        )
       } finally {
         gt.serverActionPending = !1
       }
