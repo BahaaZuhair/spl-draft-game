@@ -197,8 +197,6 @@ header.top{display:flex;align-items:baseline;justify-content:space-between;gap:1
 .season-top{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:16px}
 .season-top .h1{font-size:clamp(22px,3.4vw,32px)}
 .season-sub{color:var(--sand);font-size:13.5px;margin-top:6px}
-.secure-season-test-badge{display:none;margin-top:7px;font-size:11px;color:var(--gold);letter-spacing:.06em;text-transform:uppercase}
-body.secure-season-test .secure-season-test-badge{display:block}
 .season-sub b{color:var(--gold)}
 .season-ctl{display:flex;gap:10px;flex-wrap:wrap}
 .latest{margin-bottom:16px}
@@ -690,7 +688,6 @@ table.lg tr:nth-child(-n+3) td.pos{color:var(--gold);font-weight:700}
       <div>
         <h1 class="h1">Season 25/26</h1>
         <div class="season-sub"><span id="seasonYou">Your draft</span> replaces <b id="replacedClub"></b> · Matchday <b id="mdNow">0</b> / 34</div>
-        <div class="secure-season-test-badge">Phase 4 secure server season test</div>
       </div>
       <div class="season-ctl" id="seasonCtl">
         <button class="btn" id="nextMdBtn">Play Next Game</button>
@@ -1396,8 +1393,7 @@ async function __inflate(t) {
       SUPABASE_PUBLISHABLE_KEY = "sb_publishable_-ZSGulpdWPsmHeX4_DY49Q_knHYIpSf",
       DRAFT_SHADOW_TEST_ENABLED = !1,
       DRAFT_SERVER_MODE_ENABLED = !0,
-      SERVER_SEASON_TEST_ENABLED =
-        new URLSearchParams(window.location.search).get("serverSeason") === "1",
+      SERVER_SEASON_TEST_ENABLED = !0,
       SERVER_DRAFT_RESUME_KEY = "spl_draft_secure_run_v1",
       SERVER_SEASON_RESUME_KEY = "spl_draft_secure_season_v1",
       RUN_HISTORY_LIMIT = 100,
@@ -5947,8 +5943,7 @@ async function __inflate(t) {
     xt("startNewDraftBtn").addEventListener("click", cancelSavedDraftAndStartNew);
     xt("refreshGlobalLeaderboardBtn").addEventListener("click", renderGlobalLeaderboard);
     if (SERVER_SEASON_TEST_ENABLED) {
-      document.body.classList.add("secure-season-test");
-      console.info("SPL Draft Phase 4 secure server season test is ENABLED.")
+      console.info("SPL Draft secure server season simulation is ENABLED.")
     }
     if (DRAFT_SHADOW_TEST_ENABLED) console.info("SPL Draft private-backend shadow test is ENABLED.");
     if (DRAFT_SERVER_MODE_ENABLED) console.info("SPL Draft secure server drafting is active.");
