@@ -1337,6 +1337,7 @@ async function __inflate(t) {
       SUPABASE_URL = "https://wyxtriciyixkglcrppgh.supabase.co",
       SUPABASE_PUBLISHABLE_KEY = "sb_publishable_-ZSGulpdWPsmHeX4_DY49Q_knHYIpSf",
       DRAFT_SHADOW_TEST_ENABLED = new URLSearchParams(window.location.search).get("backendTest") === "1",
+      DRAFT_SERVER_MODE_ENABLED = new URLSearchParams(window.location.search).get("serverDraft") === "1",
       RUN_HISTORY_LIMIT = 100,
       RUN_SCORE_CONFIG = {
         pointsValue: 100,
@@ -1593,50 +1594,136 @@ async function __inflate(t) {
     }
 
     async function runStartDraftShadowTest(localRun, expected) {
-      if (!DRAFT_SHADOW_TEST_ENABLED || !localRun || localRun.isDaily) return;
-      setDraftBackendStatus("testing", "Private backend test: creating secure draft state…");
+      if (
+        (!DRAFT_SHADOW_TEST_ENABLED && !DRAFT_SERVER_MODE_ENABLED) ||
+        !localRun ||
+        localRun.isDaily
+      ) return !1;
+
+      if (DRAFT_SERVER_MODE_ENABLED) {
+        xt("rollBtn").disabled = !0;
+        setDraftBackendStatus(
+          "testing",
+          "Secure server draft: creating your private authenticated run…"
+        )
+      } else {
+        setDraftBackendStatus(
+          "testing",
+          "Private backend test: creating secure draft state…"
+        )
+      }
+
       try {
         await initializeOnlineBackend();
-        const { data, error } = await onlineClient.functions.invoke("start-draft", {
-          body: {
-            clientRunId: localRun.runId,
-            teamName: Jt(),
-            formationCode: expected.formationCode,
-            difficulty: expected.difficulty,
-            draftMode: expected.draftMode
+
+        const { data, error } = await onlineClient.functions.invoke(
+          "start-draft",
+          {
+            body: {
+              clientRunId: localRun.runId,
+              teamName: Jt(),
+              formationCode: expected.formationCode,
+              difficulty: expected.difficulty,
+              draftMode: expected.draftMode
+            }
           }
-        });
+        );
+
         if (error) throw error;
-        if (!data || !data.ok || !data.state) throw new Error(data && data.errorCode || "Missing server state");
-        const issues = compareShadowDraftState(localRun, data.state, expected);
+        if (!data || !data.ok || !data.state) {
+          throw new Error(
+            data && data.errorCode || "Missing server state"
+          )
+        }
+
+        const issues = compareShadowDraftState(
+          localRun,
+          data.state,
+          expected
+        );
+
         localRun.serverShadow = {
           status: issues.length ? "mismatch" : "verified",
           serverRunId: data.state.runId || null,
           checkedAt: new Date().toISOString(),
           issues
         };
+
         if (issues.length) {
-          console.warn("start-draft shadow verification mismatch", {
-            issues,
-            localRun,
-            serverState: data.state
-          });
-          setDraftBackendStatus("error", `Private backend mismatch: ${issues.join(", ")}`)
-          setDraftBackendTools(!1)
-        } else {
-          console.info("start-draft shadow verification passed", data.state);
-          setDraftBackendStatus("ok", "✓ Private backend verified: authenticated run, 11 slots, formation, mode and skips all match.")
-          setDraftBackendTools(!0, "Ready to test the secure server roulette.")
+          console.warn(
+            "start-draft verification mismatch",
+            {
+              issues,
+              localRun,
+              serverState: data.state
+            }
+          );
+
+          setDraftBackendStatus(
+            "error",
+            `Private backend mismatch: ${issues.join(", ")}`
+          );
+          setDraftBackendTools(!1);
+          xt("rollBtn").disabled = !0;
+          return !1
         }
+
+        console.info(
+          "start-draft verification passed",
+          data.state
+        );
+
+        if (DRAFT_SERVER_MODE_ENABLED) {
+          localRun.serverMode = !0;
+          localRun.pick = +data.state.currentPick || 1;
+          localRun.skipsInitial = +data.state.skipsInitial;
+          localRun.skipsLeft = +data.state.skipsLeft;
+
+          setDraftBackendStatus(
+            "ok",
+            "✓ Secure server draft active: run ownership, formation, mode, skips and all 11 slots verified."
+          );
+          setDraftBackendTools(!1);
+          xt("rollBtn").disabled = !1
+        } else {
+          setDraftBackendStatus(
+            "ok",
+            "✓ Private backend verified: authenticated run, 11 slots, formation, mode and skips all match."
+          );
+          setDraftBackendTools(
+            !0,
+            "Ready to test the secure server roulette."
+          )
+        }
+
+        return !0
       } catch (error) {
         localRun.serverShadow = {
           status: "error",
           checkedAt: new Date().toISOString(),
-          error: String(error && error.message || error).slice(0, 180)
+          error: String(
+            error && error.message || error
+          ).slice(0, 180)
         };
-        console.warn("start-draft shadow test failed; local game continues normally.", error);
-        setDraftBackendStatus("error", "Private backend test failed. The local draft still works; check the browser console and Edge Function logs.")
-        setDraftBackendTools(!1)
+
+        console.warn(
+          "start-draft backend request failed.",
+          error
+        );
+
+        setDraftBackendStatus(
+          "error",
+          DRAFT_SERVER_MODE_ENABLED
+            ? "Secure server draft could not start. Restart the run after checking the Edge Function logs."
+            : "Private backend test failed. The local draft still works; check the browser console and Edge Function logs."
+        );
+        setDraftBackendTools(!1);
+
+        if (DRAFT_SERVER_MODE_ENABLED) {
+          xt("rollBtn").disabled = !0
+        }
+
+        return !1
       }
     }
 
@@ -3141,7 +3228,310 @@ async function __inflate(t) {
       return `<span class="season">${t}<\/span>`
     }
 
+    function serverOfferToLocalRoll(offer) {
+      return {
+        club: offer.sourceClub,
+        season: offer.sourceSeason,
+        pool: Array.isArray(offer.cards)
+          ? offer.cards.map(card => ({
+              ...card,
+              rating: +card.rating,
+              eligible_slots: Array.isArray(card.eligible_slots)
+                ? card.eligible_slots
+                : []
+            }))
+          : [],
+        sourceClubAr: offer.sourceClubAr || "",
+        offerId: offer.offerId,
+        fittingSlotIndexes: Array.isArray(
+          offer.fittingSlotIndexes
+        )
+          ? offer.fittingSlotIndexes.map(Number)
+          : []
+      }
+    }
+
+    async function runServerDraftRoll(useSkip) {
+      if (
+        !gt ||
+        !gt.serverMode ||
+        !gt.serverShadow ||
+        "verified" !== gt.serverShadow.status ||
+        !gt.serverShadow.serverRunId ||
+        gt.rolling ||
+        gt.complete ||
+        gt.pendingPlayer ||
+        gt.serverActionPending
+      ) return;
+
+      if (useSkip && gt.skipsLeft <= 0) return;
+
+      gt.serverActionPending = !0;
+      gt.rolling = !0;
+      xt("rollBtn").disabled = !0;
+      X(!1);
+      xt("rosterPanel").style.display = "none";
+
+      setDraftBackendStatus(
+        "testing",
+        useSkip
+          ? "Secure server draft: using a server-owned skip…"
+          : "Secure server draft: rolling an eligible private club-season pool…"
+      );
+
+      try {
+        await initializeOnlineBackend();
+
+        const { data, error } =
+          await onlineClient.functions.invoke(
+            "roll-draft",
+            {
+              body: {
+                runId: gt.serverShadow.serverRunId,
+                useSkip: !!useSkip
+              }
+            }
+          );
+
+        if (error) throw error;
+        if (!data || !data.ok || !data.offer) {
+          throw new Error(
+            data && data.errorCode || "Missing server offer"
+          )
+        }
+
+        const offer = data.offer,
+          selectedPool = serverOfferToLocalRoll(offer);
+
+        if (!selectedPool.pool.length) {
+          throw new Error("Server returned an empty roster")
+        }
+
+        gt.skipsLeft = +offer.skipsLeft;
+        gt.serverShadow.currentOffer = offer;
+
+        const allClubNames = [
+            ...new Set(
+              Object.keys(ct).map(
+                key => ot(key.split("|")[0])
+              )
+            )
+          ],
+          clubStop = q(
+            xt("clubStrip"),
+            allClubNames.map(Z),
+            Z(ot(selectedPool.club))
+          ),
+          seasonStop = q(
+            xt("seasonStrip"),
+            nt.map(u),
+            u(selectedPool.season)
+          );
+
+        requestAnimationFrame(() => {
+          xt("clubStrip").style.transition =
+            "transform 2.4s cubic-bezier(.14,.84,.16,1)";
+          xt("seasonStrip").style.transition =
+            "transform 2.8s cubic-bezier(.14,.84,.16,1)";
+          xt("clubStrip").style.transform =
+            `translateY(${-(clubStop-1)*Rt}px)`;
+          xt("seasonStrip").style.transform =
+            `translateY(${-(seasonStop-1)*Rt}px)`
+        });
+
+        const token = It;
+
+        setTimeout(() => {
+          if (
+            token !== It ||
+            !gt ||
+            !gt.serverMode
+          ) return;
+
+          gt.rolling = !1;
+          gt.serverActionPending = !1;
+          gt.roll = selectedPool;
+
+          X(gt.skipsLeft > 0);
+
+          const clubStyle = rt[selectedPool.club] || {
+            color: "#888"
+          };
+
+          xt("rosterPanel").style.display = "block";
+          xt("clubDot").style.background = clubStyle.color;
+          xt("clubName").textContent =
+            ot(selectedPool.club);
+          xt("clubSeason").textContent =
+            "alltime" === gt.mode
+              ? selectedPool.season + " · PEAK CARDS"
+              : selectedPool.season;
+          xt("clubNameAr").textContent =
+            selectedPool.sourceClubAr || "";
+
+          D();
+
+          setDraftBackendStatus(
+            "ok",
+            `✓ Secure server offer ready: ${ot(
+              selectedPool.club
+            )} ${selectedPool.season} · ${
+              selectedPool.pool.length
+            } eligible cards · ${gt.skipsLeft} skips left.`
+          )
+        }, 2950)
+      } catch (error) {
+        gt.rolling = !1;
+        gt.serverActionPending = !1;
+        gt.roll = null;
+
+        console.warn(
+          "Secure server roll failed.",
+          error
+        );
+
+        setDraftBackendStatus(
+          "error",
+          `Secure server roll failed: ${String(
+            error && error.message || error
+          )}`
+        );
+
+        xt("rollBtn").disabled = !1
+      }
+    }
+
+    function applyServerSelectionToLocalDraft(
+      selectedCard,
+      slotIndex,
+      serverState
+    ) {
+      const card = {
+        ...selectedCard,
+        rating: +selectedCard.rating,
+        eligible_slots: Array.isArray(
+          selectedCard.eligible_slots
+        )
+          ? selectedCard.eligible_slots
+          : []
+      };
+
+      gt.slots[slotIndex].player = card;
+      gt.draftedCards.add(card.card_id);
+      gt.draftedPlayers.add(card.player_id);
+      gt.pendingPlayer = null;
+      gt.roll = null;
+      gt.pick = +serverState.currentPick;
+      gt.skipsLeft = +serverState.skipsLeft;
+      gt.serverShadow.currentOffer = null;
+
+      xt("rosterPanel").style.display = "none";
+      X(!1);
+      U(slotIndex);
+      H();
+
+      if ("squad_complete" === serverState.status) {
+        gt.complete = !0;
+        xt("rollBtn").disabled = !0;
+
+        setDraftBackendStatus(
+          "ok",
+          "✓ Secure server draft complete: all 11 private selections are stored and validated."
+        );
+
+        checkSquadAchievements();
+
+        const token = It;
+        setTimeout(() => {
+          token === It && gt && g()
+        }, 650)
+      } else {
+        xt("rollBtn").disabled = !1;
+
+        setDraftBackendStatus(
+          "ok",
+          `✓ Secure selection stored. Server advanced to Pick ${gt.pick}.`
+        )
+      }
+    }
+
+    async function runServerDraftSelection(
+      card,
+      slotIndex
+    ) {
+      if (
+        !gt ||
+        !gt.serverMode ||
+        !gt.roll ||
+        !gt.roll.offerId ||
+        gt.serverActionPending
+      ) return;
+
+      gt.serverActionPending = !0;
+      gt.pendingPlayer = card;
+      xt("rollBtn").disabled = !0;
+      X(!1);
+
+      setDraftBackendStatus(
+        "testing",
+        `Secure server draft: validating ${card.name} for ${gt.slots[slotIndex].code}…`
+      );
+
+      try {
+        await initializeOnlineBackend();
+
+        const { data, error } =
+          await onlineClient.functions.invoke(
+            "select-player",
+            {
+              body: {
+                runId: gt.serverShadow.serverRunId,
+                offerId: gt.roll.offerId,
+                cardId: card.card_id,
+                slotIndex
+              }
+            }
+          );
+
+        if (error) throw error;
+        if (!data || !data.ok || !data.result) {
+          throw new Error(
+            data && data.errorCode ||
+              "Missing server selection result"
+          )
+        }
+
+        applyServerSelectionToLocalDraft(
+          data.result.selectedCard,
+          +data.result.selectedSlotIndex,
+          data.result.state
+        )
+      } catch (error) {
+        console.warn(
+          "Secure server selection failed.",
+          error
+        );
+
+        gt.pendingPlayer = null;
+
+        setDraftBackendStatus(
+          "error",
+          `Secure selection failed: ${String(
+            error && error.message || error
+          )}`
+        );
+
+        D();
+        X(gt.skipsLeft > 0)
+      } finally {
+        gt.serverActionPending = !1
+      }
+    }
+
     function z(t) {
+      if (DRAFT_SERVER_MODE_ENABLED && gt && gt.serverMode && !gt.isDaily) {
+        return void runServerDraftRoll(t)
+      }
       if (gt.rolling || gt.complete || gt.pendingPlayer) return;
       const availablePools = L();
       if (!availablePools.length) return void l("No pool can fill your open slots");
@@ -3197,7 +3587,7 @@ async function __inflate(t) {
         xt("clubName").textContent = ot(selectedPool.club);
         xt("clubSeason").textContent = "alltime" === gt.mode ? selectedPool.season + " · PEAK CARDS" : selectedPool.season;
         const originalPool = ct[selectedPool.club + "|" + selectedPool.season];
-        xt("clubNameAr").textContent = originalPool && originalPool[0] && originalPool[0].club_ar || "";
+        xt("clubNameAr").textContent = gt.roll.sourceClubAr || originalPool && originalPool[0] && originalPool[0].club_ar || "";
         D()
       }, 2950)
     }
@@ -3289,6 +3679,9 @@ async function __inflate(t) {
     }
 
     function S(t, s) {
+      if (DRAFT_SERVER_MODE_ENABLED && gt && gt.serverMode && !gt.isDaily) {
+        return void runServerDraftSelection(t, s)
+      }
       gt.slots[s].player = t;
       gt.draftedCards.add(t.card_id);
       gt.draftedPlayers.add(t.player_id);
@@ -4109,16 +4502,29 @@ async function __inflate(t) {
       H();
       U();
       n("scr-draft");
-      if (DRAFT_SHADOW_TEST_ENABLED && !isDaily) {
-        const expectedDifficulty = 0 === skips ? "hard" : "normal";
-        runStartDraftShadowTest(gt, {
-          formationCode: fkey,
-          difficulty: expectedDifficulty,
-          draftMode: mode,
-          skips
-        })
+      if (
+        (DRAFT_SHADOW_TEST_ENABLED || DRAFT_SERVER_MODE_ENABLED) &&
+        !isDaily
+      ) {
+        const expectedDifficulty =
+          0 === skips ? "hard" : "normal";
+
+        if (DRAFT_SERVER_MODE_ENABLED) {
+          gt.serverMode = !0;
+          xt("rollBtn").disabled = !0
+        }
+
+        runStartDraftShadowTest(
+          gt,
+          {
+            formationCode: fkey,
+            difficulty: expectedDifficulty,
+            draftMode: mode,
+            skips
+          }
+        )
       } else {
-        setDraftBackendStatus("", "")
+        setDraftBackendStatus("", "");
         setDraftBackendTools(!1)
       }
     }
@@ -4188,6 +4594,7 @@ async function __inflate(t) {
     }));
     xt("refreshGlobalLeaderboardBtn").addEventListener("click", renderGlobalLeaderboard);
     if (DRAFT_SHADOW_TEST_ENABLED) console.info("SPL Draft private-backend shadow test is ENABLED.");
+    if (DRAFT_SERVER_MODE_ENABLED) console.info("SPL Draft SECURE SERVER DRAFT mode is ENABLED.");
     initializeOnlineBackend().then(() => renderGlobalLeaderboard()).catch(() => {});
     xt("exportRecordsBtn").addEventListener("click", exportLocalProfile);
     xt("importRecordsBtn").addEventListener("click", () => xt("importRecordsFile").click());
