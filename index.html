@@ -176,6 +176,14 @@ header.top{display:flex;align-items:baseline;justify-content:space-between;gap:1
 .prob .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold-deep),var(--gold));border-radius:99px}
 .prob .pc{font-family:var(--disp);text-align:right}
 .actions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+.resume-draft-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:15px 0}
+.resume-draft-summary .item{background:rgba(10,22,17,.52);border:1px solid rgba(237,243,236,.1);border-radius:10px;padding:10px 12px}
+.resume-draft-summary .item span{display:block;color:var(--sand);font-size:10px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px}
+.resume-draft-summary .item b{font-size:14px;color:var(--white);word-break:break-word}
+.resume-draft-note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:10px}
+.resume-draft-error{display:none;margin-top:12px;padding:9px 11px;border-radius:9px;border:1px solid rgba(224,90,90,.45);background:rgba(224,90,90,.07);color:var(--red);font-size:12px;line-height:1.4}
+.resume-draft-error.on{display:block}
+@media(max-width:520px){.resume-draft-summary{grid-template-columns:1fr}}
 .swaplist{display:flex;flex-direction:column;gap:8px;max-height:320px;overflow:auto}
 .swaplist>*{flex:none}
 .swaplist button{text-align:left;padding:11px 14px;border-radius:10px;background:var(--panel2);border:1px solid rgba(237,243,236,.12);font-size:13.5px;transition:all .12s}
@@ -776,6 +784,34 @@ table.lg tr:nth-child(-n+3) td.pos{color:var(--gold);font-weight:700}
     <div class="sub" id="swapSub"></div>
     <div class="swaplist" id="swapList"></div>
     <div class="actions"><button class="btn ghost" id="swapCancel">Cancel</button></div>
+  </div>
+</div>
+
+<!-- unfinished secure draft choice modal -->
+<div class="modal" id="resumeDraftModal" role="dialog" aria-modal="true" aria-labelledby="resumeDraftTitle">
+  <div class="mbox">
+    <h2 id="resumeDraftTitle">You have an unfinished draft</h2>
+    <div class="sub">Your secure draft is saved on the server. Choose whether to continue it or start fresh.</div>
+
+    <div class="resume-draft-summary">
+      <div class="item"><span>Team</span><b id="resumeDraftTeam">—</b></div>
+      <div class="item"><span>Formation</span><b id="resumeDraftFormation">—</b></div>
+      <div class="item"><span>Progress</span><b id="resumeDraftProgress">—</b></div>
+      <div class="item"><span>Skips left</span><b id="resumeDraftSkips">—</b></div>
+      <div class="item"><span>Difficulty</span><b id="resumeDraftDifficulty">—</b></div>
+      <div class="item"><span>Draft mode</span><b id="resumeDraftMode">—</b></div>
+    </div>
+
+    <div class="resume-draft-note">
+      Starting a new draft securely cancels this saved run and expires its active roulette offer.
+    </div>
+
+    <div id="resumeDraftChoiceError" class="resume-draft-error" role="alert"></div>
+
+    <div class="actions">
+      <button class="btn" id="resumeSavedDraftBtn" type="button">Resume Draft</button>
+      <button class="btn ghost" id="startNewDraftBtn" type="button">Start New Draft</button>
+    </div>
   </div>
 </div>
 
@@ -3102,7 +3138,7 @@ async function __inflate(t) {
     let It = 0;
 
     function o() {
-      It++, F(), gt = null, Ct = null, Qt = null, Kt = [], d("sumModal"), d("swapModal"), d("navModal"), xt("rosterPanel").style.display = "none", xt("openSummaryBtn").style.display = "none", X(!1)
+      It++, F(), gt = null, Ct = null, Qt = null, Kt = [], d("sumModal"), d("swapModal"), d("navModal"), d("resumeDraftModal"), xt("rosterPanel").style.display = "none", xt("openSummaryBtn").style.display = "none", X(!1)
     }
 
     function i() {
@@ -3864,16 +3900,67 @@ async function __inflate(t) {
       }
     }
 
+    let pendingSecureResumeState = null,
+      secureResumeChoiceBusy = !1;
+
+    function setResumeDraftChoiceBusy(isBusy) {
+      secureResumeChoiceBusy = !!isBusy;
+
+      const resumeButton = xt("resumeSavedDraftBtn"),
+        newButton = xt("startNewDraftBtn");
+
+      resumeButton.disabled = secureResumeChoiceBusy;
+      newButton.disabled = secureResumeChoiceBusy;
+
+      resumeButton.textContent = secureResumeChoiceBusy
+        ? "Please wait…"
+        : "Resume Draft"
+    }
+
+    function showResumeDraftChoiceError(message = "") {
+      const box = xt("resumeDraftChoiceError");
+      box.textContent = message;
+      box.classList.toggle("on", !!message)
+    }
+
+    function showResumeDraftChoice(state) {
+      pendingSecureResumeState = state;
+
+      xt("resumeDraftTeam").textContent =
+        state.teamName || "Unnamed Team";
+      xt("resumeDraftFormation").textContent =
+        state.formationName ||
+        state.formationCode ||
+        "—";
+      xt("resumeDraftProgress").textContent =
+        `${+state.selectedCount || 0} / 11 players · Pick ${+state.currentPick || 1}`;
+      xt("resumeDraftSkips").textContent =
+        String(+state.skipsLeft || 0);
+      xt("resumeDraftDifficulty").textContent =
+        "hard" === state.difficulty
+          ? "Hard"
+          : "Normal";
+      xt("resumeDraftMode").textContent =
+        "alltime" === state.draftMode
+          ? "Max Rating All-Time"
+          : "Ratings by Season";
+
+      showResumeDraftChoiceError("");
+      setResumeDraftChoiceBusy(!1);
+      r("resumeDraftModal");
+
+      setTimeout(() => {
+        try {
+          xt("resumeSavedDraftBtn").focus()
+        } catch {}
+      }, 30)
+    }
+
     async function tryResumeSecureDraft() {
       if (!DRAFT_SERVER_MODE_ENABLED) return !1;
 
       const marker = readSecureDraftResumeMarker();
       if (!marker || !marker.serverRunId) return !1;
-
-      setDraftBackendStatus(
-        "testing",
-        "Secure server draft: restoring your saved private run…"
-      );
 
       try {
         await initializeOnlineBackend();
@@ -3889,29 +3976,116 @@ async function __inflate(t) {
           );
 
         if (error) throw error;
+
         if (!data || !data.ok || !data.state) {
           clearSecureDraftResumeMarker();
           return !1
         }
 
-        rebuildSecureDraftFromServerState(
-          data.state
-        );
+        showResumeDraftChoice(data.state);
 
         console.info(
-          "Secure server draft resumed.",
+          "Unfinished secure draft found.",
           data.state
         );
 
         return !0
       } catch (error) {
         console.warn(
-          "Could not resume secure server draft.",
+          "Could not check the saved secure draft.",
           error
         );
 
         clearSecureDraftResumeMarker();
         return !1
+      }
+    }
+
+    async function resumeChosenSecureDraft() {
+      if (
+        secureResumeChoiceBusy ||
+        !pendingSecureResumeState
+      ) return;
+
+      setResumeDraftChoiceBusy(!0);
+      showResumeDraftChoiceError("");
+
+      try {
+        const state = pendingSecureResumeState;
+
+        d("resumeDraftModal");
+        pendingSecureResumeState = null;
+
+        rebuildSecureDraftFromServerState(state)
+      } catch (error) {
+        console.warn(
+          "Could not restore the chosen secure draft.",
+          error
+        );
+
+        showResumeDraftChoiceError(
+          "The saved draft could not be restored. Please try again."
+        );
+        r("resumeDraftModal")
+      } finally {
+        setResumeDraftChoiceBusy(!1)
+      }
+    }
+
+    async function cancelSavedDraftAndStartNew() {
+      if (
+        secureResumeChoiceBusy ||
+        !pendingSecureResumeState ||
+        !pendingSecureResumeState.runId
+      ) return;
+
+      setResumeDraftChoiceBusy(!0);
+      showResumeDraftChoiceError("");
+
+      try {
+        await initializeOnlineBackend();
+
+        const { data, error } =
+          await onlineClient.functions.invoke(
+            "cancel-draft",
+            {
+              body: {
+                runId: pendingSecureResumeState.runId,
+                reason: "start_new_draft"
+              }
+            }
+          );
+
+        if (error) throw error;
+        if (!data || !data.ok || !data.result) {
+          throw new Error(
+            data && data.errorCode ||
+              "Missing cancellation result"
+          )
+        }
+
+        clearSecureDraftResumeMarker();
+        pendingSecureResumeState = null;
+        d("resumeDraftModal");
+
+        o();
+        i();
+        n("scr-menu", {
+          replaceHistory: !0
+        });
+
+        l("Saved draft cancelled. You can start a new draft.")
+      } catch (error) {
+        console.warn(
+          "Could not cancel the saved draft.",
+          error
+        );
+
+        showResumeDraftChoiceError(
+          "The saved draft could not be cancelled. Check your connection and try again."
+        )
+      } finally {
+        setResumeDraftChoiceBusy(!1)
       }
     }
 
@@ -4979,6 +5153,8 @@ async function __inflate(t) {
       globalLeaderboardPeriod = button.dataset.period;
       renderGlobalLeaderboard()
     }));
+    xt("resumeSavedDraftBtn").addEventListener("click", resumeChosenSecureDraft);
+    xt("startNewDraftBtn").addEventListener("click", cancelSavedDraftAndStartNew);
     xt("refreshGlobalLeaderboardBtn").addEventListener("click", renderGlobalLeaderboard);
     if (DRAFT_SHADOW_TEST_ENABLED) console.info("SPL Draft private-backend shadow test is ENABLED.");
     if (DRAFT_SERVER_MODE_ENABLED) console.info("SPL Draft SECURE SERVER DRAFT mode is ENABLED.");
