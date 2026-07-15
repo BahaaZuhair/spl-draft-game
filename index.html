@@ -1395,6 +1395,8 @@ async function __inflate(t) {
       DRAFT_SERVER_MODE_ENABLED = !0,
       SERVER_SEASON_TEST_ENABLED = !0,
       SERVER_PLAYER_STATS_TEST_ENABLED = !0,
+      SERVER_AWARDS_TEST_ENABLED =
+        new URLSearchParams(window.location.search).get("serverAwards") === "1",
       SERVER_DRAFT_RESUME_KEY = "spl_draft_secure_run_v1",
       SERVER_SEASON_RESUME_KEY = "spl_draft_secure_season_v1",
       RUN_HISTORY_LIMIT = 100,
@@ -4908,13 +4910,69 @@ async function __inflate(t) {
       }))
     }
 
+    function trustedLeagueAwards() {
+      if (
+        !SERVER_AWARDS_TEST_ENABLED ||
+        !Ct ||
+        !Ct.serverMode ||
+        !Ct.serverLeagueAwards
+      ) return null;
+
+      const awards = Ct.serverLeagueAwards,
+        normalizePlayer = player => ({
+          name: player && player.name || "—",
+          club: player && player.club || Lt,
+          rating: +(player && player.rating) || 0,
+          g: +(player && player.goals) || 0,
+          a: +(player && player.assists) || 0,
+          pts: +(player && player.points) || 0,
+          mine: !!(player && player.mine)
+        }),
+        normalizeGlove = player => ({
+          name: player && player.name || "—",
+          club: player && player.club || Lt,
+          cs: +(player && player.cleanSheets) || 0,
+          ga: +(player && player.goalsAgainst) || 0,
+          mine: !!(player && player.mine)
+        });
+
+      if (
+        !awards.topScorer ||
+        !awards.topAssister ||
+        !awards.goldenGlove ||
+        !awards.bestPlayer
+      ) return null;
+
+      return {
+        topScorer:
+          normalizePlayer(awards.topScorer),
+        topAssister:
+          normalizePlayer(awards.topAssister),
+        glove:
+          normalizeGlove(awards.goldenGlove),
+        best:
+          normalizePlayer(awards.bestPlayer)
+      }
+    }
+
     function applyTrustedPlayerStatsState(state) {
       if (
-        !SERVER_PLAYER_STATS_TEST_ENABLED ||
         !Ct ||
         !Ct.serverMode ||
         !state
       ) return;
+
+      if (
+        state.leagueAwardsReady === true &&
+        state.leagueAwards
+      ) {
+        Ct.serverLeagueAwards =
+          state.leagueAwards
+      }
+
+      if (!SERVER_PLAYER_STATS_TEST_ENABLED) {
+        return
+      }
 
       const cumulativePlayers =
         state.playerStats &&
@@ -5069,6 +5127,7 @@ async function __inflate(t) {
         myMatches: [],
         lastRatings: null,
         serverLatestPlayerDetails: null,
+        serverLeagueAwards: null,
         savedRun: null
       };
 
@@ -5699,7 +5758,9 @@ async function __inflate(t) {
             b = o[0],
             c = i[0];
           xt("bigWin").textContent = b ? `${b.gf}\u2013${b.ga} vs ${b.opp} (${b.home?"home":"away"}, MD ${b.md})` : "No wins this season.", xt("bigLoss").textContent = c ? `${c.gf}\u2013${c.ga} vs ${c.opp} (${c.home?"home":"away"}, MD ${c.md})` : "Unbeaten all season.";
-          const m = function(t) {
+          const m =
+            trustedLeagueAwards() ||
+            function(t) {
               const s = function(t) {
                   const s = [],
                     a = Object.fromEntries(t.map(t => [t.id, t.pts]));
@@ -6089,6 +6150,9 @@ async function __inflate(t) {
     }
     if (SERVER_PLAYER_STATS_TEST_ENABLED) {
       console.info("SPL Draft trusted server player statistics are ENABLED.")
+    }
+    if (SERVER_AWARDS_TEST_ENABLED) {
+      console.info("SPL Draft trusted league-awards display test is ENABLED.")
     }
     if (DRAFT_SHADOW_TEST_ENABLED) console.info("SPL Draft private-backend shadow test is ENABLED.");
     if (DRAFT_SERVER_MODE_ENABLED) console.info("SPL Draft secure server drafting is active.");
