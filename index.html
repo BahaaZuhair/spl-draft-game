@@ -98,7 +98,7 @@ header.top{display:flex;align-items:baseline;justify-content:space-between;gap:1
 .draft-backend-status.testing{border-color:rgba(232,185,75,.42);color:var(--gold);background:rgba(232,185,75,.07)}
 .roulette-queued #clubStrip,.roulette-queued #seasonStrip{filter:brightness(1.12);animation:queuedRollPulse .42s ease-in-out infinite alternate}
 @keyframes queuedRollPulse{from{opacity:.72}to{opacity:1}}
-.draft-backend-tools{display:none;gap:8px;align-items:center;flex-wrap:wrap;margin:-6px 0 14px}
+.draft-backend-tools{display:none!important;gap:8px;align-items:center;flex-wrap:wrap;margin:-6px 0 14px}
 .draft-backend-tools.on{display:flex}
 .draft-backend-tools .btn{padding:8px 12px;font-size:12px}
 .draft-backend-details{font-size:12px;color:var(--muted);line-height:1.4}
@@ -1374,8 +1374,8 @@ async function __inflate(t) {
       GAME_VERSION = "V6.5.1-season-board",
       SUPABASE_URL = "https://wyxtriciyixkglcrppgh.supabase.co",
       SUPABASE_PUBLISHABLE_KEY = "sb_publishable_-ZSGulpdWPsmHeX4_DY49Q_knHYIpSf",
-      DRAFT_SHADOW_TEST_ENABLED = new URLSearchParams(window.location.search).get("backendTest") === "1",
-      DRAFT_SERVER_MODE_ENABLED = new URLSearchParams(window.location.search).get("serverDraft") === "1",
+      DRAFT_SHADOW_TEST_ENABLED = !1,
+      DRAFT_SERVER_MODE_ENABLED = !0,
       SERVER_DRAFT_RESUME_KEY = "spl_draft_secure_run_v1",
       RUN_HISTORY_LIMIT = 100,
       RUN_SCORE_CONFIG = {
@@ -1597,12 +1597,15 @@ async function __inflate(t) {
     function setDraftBackendStatus(state, text) {
       const note = document.getElementById("draftBackendStatus");
       if (!note) return;
+
       note.classList.remove("on", "ok", "error", "testing");
-      if (!text) {
+
+      if ("error" !== state || !text) {
         note.textContent = "";
         return
       }
-      note.classList.add("on", state);
+
+      note.classList.add("on", "error");
       note.textContent = text
     }
 
@@ -5252,7 +5255,7 @@ async function __inflate(t) {
     xt("startNewDraftBtn").addEventListener("click", cancelSavedDraftAndStartNew);
     xt("refreshGlobalLeaderboardBtn").addEventListener("click", renderGlobalLeaderboard);
     if (DRAFT_SHADOW_TEST_ENABLED) console.info("SPL Draft private-backend shadow test is ENABLED.");
-    if (DRAFT_SERVER_MODE_ENABLED) console.info("SPL Draft SECURE SERVER DRAFT mode is ENABLED.");
+    if (DRAFT_SERVER_MODE_ENABLED) console.info("SPL Draft secure server drafting is active.");
     initializeOnlineBackend().then(async () => {
       renderGlobalLeaderboard();
       if (DRAFT_SERVER_MODE_ENABLED) {
