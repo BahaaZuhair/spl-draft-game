@@ -792,6 +792,23 @@ table.lg tr:nth-child(-n+3) td.pos{color:var(--gold);font-weight:700}
   </div>
 </div>
 
+<!-- secure season recovery modal -->
+<div class="modal" id="seasonRecoveryModal" role="dialog" aria-modal="true" aria-labelledby="seasonRecoveryTitle">
+  <div class="mbox">
+    <h2 id="seasonRecoveryTitle">Recovering your secure season</h2>
+    <div class="sub" id="seasonRecoveryText">
+      Restoring your saved squad, league table and latest revealed matchday from the server.
+    </div>
+
+    <div id="seasonRecoveryError" class="resume-draft-error" role="alert"></div>
+
+    <div class="actions">
+      <button class="btn" id="retrySeasonRecoveryBtn" type="button">Retry Recovery</button>
+      <button class="btn ghost" id="leaveSavedSeasonBtn" type="button">Start New Draft</button>
+    </div>
+  </div>
+</div>
+
 <!-- unfinished secure draft choice modal -->
 <div class="modal" id="resumeDraftModal" role="dialog" aria-modal="true" aria-labelledby="resumeDraftTitle">
   <div class="mbox">
@@ -3213,7 +3230,7 @@ async function __inflate(t) {
     let It = 0;
 
     function o() {
-      It++, F(), gt = null, Ct = null, Qt = null, Kt = [], d("sumModal"), d("swapModal"), d("navModal"), d("resumeDraftModal"), xt("rosterPanel").style.display = "none", xt("openSummaryBtn").style.display = "none", X(!1)
+      It++, F(), gt = null, Ct = null, Qt = null, Kt = [], d("sumModal"), d("swapModal"), d("navModal"), d("resumeDraftModal"), d("seasonRecoveryModal"), xt("rosterPanel").style.display = "none", xt("openSummaryBtn").style.display = "none", X(!1)
     }
 
     function i() {
@@ -4045,14 +4062,21 @@ async function __inflate(t) {
           "✓ Secure completed squad restored from the private server."
         );
 
-        if (pendingSecureSeasonResume) {
-          pendingSecureSeasonResume = !1;
+        if (pendingSecureSeasonResumeState) {
+          const restoredSeasonState =
+            pendingSecureSeasonResumeState;
+
+          pendingSecureSeasonResumeState = null;
 
           setTimeout(() => {
-            gt && startSecureServerSeason({
-              resume: !0
-            })
-          }, 250)
+            if (gt) {
+              d("seasonRecoveryModal");
+              initializeSecureSeasonScreen(
+                restoredSeasonState
+              );
+              l("Secure season restored.")
+            }
+          }, 150)
         } else {
           setTimeout(() => {
             gt && g()
@@ -4785,7 +4809,8 @@ async function __inflate(t) {
       return t === Lt ? Jt() : t
     }
 
-    let pendingSecureSeasonResume = !1;
+    let pendingSecureSeasonResumeState = null,
+      secureSeasonRecoveryBusy = !1;
 
     function readSecureSeasonResumeMarker() {
       try {
@@ -5258,6 +5283,48 @@ async function __inflate(t) {
       }
     }
 
+    function setSecureSeasonRecoveryBusy(isBusy) {
+      secureSeasonRecoveryBusy = !!isBusy;
+
+      xt("retrySeasonRecoveryBtn").disabled =
+        secureSeasonRecoveryBusy;
+      xt("leaveSavedSeasonBtn").disabled =
+        secureSeasonRecoveryBusy;
+
+      xt("retrySeasonRecoveryBtn").textContent =
+        secureSeasonRecoveryBusy
+          ? "Recovering…"
+          : "Retry Recovery"
+    }
+
+    function showSecureSeasonRecoveryError(message = "") {
+      const box = xt("seasonRecoveryError");
+      box.textContent = message;
+      box.classList.toggle("on", !!message)
+    }
+
+    function showSecureSeasonRecoveryModal() {
+      xt("seasonRecoveryText").textContent =
+        "Restoring your saved squad, league table and latest revealed matchday from the server.";
+      showSecureSeasonRecoveryError("");
+      setSecureSeasonRecoveryBusy(!0);
+      r("seasonRecoveryModal")
+    }
+
+    function leaveSavedSecureSeason() {
+      if (secureSeasonRecoveryBusy) return;
+
+      clearSecureSeasonResumeMarker();
+      pendingSecureSeasonResumeState = null;
+      d("seasonRecoveryModal");
+      o();
+      i();
+      n("scr-menu", {
+        replaceHistory: !0
+      });
+      l("Saved season left. You can start a new draft.")
+    }
+
     async function tryResumeSecureSeason() {
       if (
         !SERVER_SEASON_TEST_ENABLED ||
@@ -5272,12 +5339,14 @@ async function __inflate(t) {
         !marker.serverRunId
       ) return !1;
 
+      showSecureSeasonRecoveryModal();
+
       try {
         await initializeOnlineBackend();
 
         const { data, error } =
           await onlineClient.functions.invoke(
-            "resume-draft",
+            "start-season",
             {
               body: {
                 runId: marker.serverRunId
@@ -5287,14 +5356,24 @@ async function __inflate(t) {
 
         if (error) throw error;
 
-        if (!data || !data.ok || !data.state) {
-          clearSecureSeasonResumeMarker();
-          return !1
+        if (
+          !data ||
+          !data.ok ||
+          !data.draftState ||
+          !data.state
+        ) {
+          throw new Error(
+            data &&
+            data.errorCode ||
+            "SECURE_SEASON_RECOVERY_REJECTED"
+          )
         }
 
-        pendingSecureSeasonResume = !0;
+        pendingSecureSeasonResumeState =
+          data.state;
+
         rebuildSecureDraftFromServerState(
-          data.state
+          data.draftState
         );
 
         return !0
@@ -5304,9 +5383,17 @@ async function __inflate(t) {
           error
         );
 
-        clearSecureSeasonResumeMarker();
-        pendingSecureSeasonResume = !1;
-        return !1
+        pendingSecureSeasonResumeState = null;
+        setSecureSeasonRecoveryBusy(!1);
+
+        xt("seasonRecoveryText").textContent =
+          "Your saved season is still safe on the server.";
+
+        showSecureSeasonRecoveryError(
+          "Recovery did not complete. Check your connection, then press Retry Recovery."
+        );
+
+        return !0
       }
     }
 
@@ -5854,6 +5941,8 @@ async function __inflate(t) {
       globalLeaderboardPeriod = button.dataset.period;
       renderGlobalLeaderboard()
     }));
+    xt("retrySeasonRecoveryBtn").addEventListener("click", tryResumeSecureSeason);
+    xt("leaveSavedSeasonBtn").addEventListener("click", leaveSavedSecureSeason);
     xt("resumeSavedDraftBtn").addEventListener("click", resumeChosenSecureDraft);
     xt("startNewDraftBtn").addEventListener("click", cancelSavedDraftAndStartNew);
     xt("refreshGlobalLeaderboardBtn").addEventListener("click", renderGlobalLeaderboard);
@@ -5867,10 +5956,12 @@ async function __inflate(t) {
       renderGlobalLeaderboard();
 
       if (DRAFT_SERVER_MODE_ENABLED) {
-        const resumedSeason =
-          await tryResumeSecureSeason();
+        const seasonMarker =
+          readSecureSeasonResumeMarker();
 
-        if (!resumedSeason) {
+        if (seasonMarker) {
+          await tryResumeSecureSeason()
+        } else {
           await tryResumeSecureDraft()
         }
       }
