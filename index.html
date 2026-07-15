@@ -1395,8 +1395,7 @@ async function __inflate(t) {
       DRAFT_SERVER_MODE_ENABLED = !0,
       SERVER_SEASON_TEST_ENABLED = !0,
       SERVER_PLAYER_STATS_TEST_ENABLED = !0,
-      SERVER_AWARDS_TEST_ENABLED =
-        new URLSearchParams(window.location.search).get("serverAwards") === "1",
+      SERVER_AWARDS_TEST_ENABLED = !0,
       SERVER_DRAFT_RESUME_KEY = "spl_draft_secure_run_v1",
       SERVER_SEASON_RESUME_KEY = "spl_draft_secure_season_v1",
       RUN_HISTORY_LIMIT = 100,
@@ -6152,7 +6151,7 @@ async function __inflate(t) {
       console.info("SPL Draft trusted server player statistics are ENABLED.")
     }
     if (SERVER_AWARDS_TEST_ENABLED) {
-      console.info("SPL Draft trusted league-awards display test is ENABLED.")
+      console.info("SPL Draft trusted server league awards are ENABLED.")
     }
     if (DRAFT_SHADOW_TEST_ENABLED) console.info("SPL Draft private-backend shadow test is ENABLED.");
     if (DRAFT_SERVER_MODE_ENABLED) console.info("SPL Draft secure server drafting is active.");
