@@ -1393,9 +1393,10 @@ async function __inflate(t) {
       SUPABASE_PUBLISHABLE_KEY = "sb_publishable_-ZSGulpdWPsmHeX4_DY49Q_knHYIpSf",
       DRAFT_SHADOW_TEST_ENABLED = !1,
       DRAFT_SERVER_MODE_ENABLED = !0,
-      SERVER_SEASON_TEST_ENABLED = !0,
-      SERVER_PLAYER_STATS_TEST_ENABLED = !0,
-      SERVER_AWARDS_TEST_ENABLED = !0,
+      SERVER_SEASON_ENABLED = !0,
+      SERVER_PLAYER_STATS_ENABLED = !0,
+      SERVER_AWARDS_ENABLED = !0,
+      PHASE4_PRODUCTION_BUILD = "phase4-final-2026-07-15",
       SERVER_DRAFT_RESUME_KEY = "spl_draft_secure_run_v1",
       SERVER_SEASON_RESUME_KEY = "spl_draft_secure_season_v1",
       RUN_HISTORY_LIMIT = 100,
@@ -1567,6 +1568,9 @@ async function __inflate(t) {
         note.textContent = "Daily Challenge practice attempts stay local and are not submitted to the global leaderboard."
       } else if ("skipped-alltime" === submission.status) {
         note.textContent = "Max Rating All-Time is local-only and does not enter the global leaderboard."
+      } else if ("server-managed" === submission.status) {
+        note.classList.add("ok");
+        note.textContent = "This standard run is finalized and submitted only by the trusted server."
       } else if ("pending" === submission.status) {
         note.textContent = "Online score submission pending — it will retry when a connection is available."
       } else if ("error" === submission.status) {
@@ -2287,13 +2291,26 @@ async function __inflate(t) {
 
     async function submitRunOnline(run, options = {}) {
       if (!run || !run.runId) return !1;
-      if ("alltime" === run.draftMode) {
-        run.onlineSubmission = { status: "skipped-alltime", updatedAt: new Date().toISOString() };
+
+      if (!run.isDailyChallenge) {
+        if ("alltime" === run.draftMode) {
+          run.onlineSubmission = {
+            status: "skipped-alltime",
+            updatedAt: new Date().toISOString()
+          }
+        } else {
+          run.onlineSubmission = {
+            status: "server-managed",
+            updatedAt: new Date().toISOString()
+          }
+        }
+
         saveLocalProfile();
         updateOnlineSubmissionNote(run);
         return !1
       }
-      if (run.isDailyChallenge && "official" !== run.dailyAttemptType) {
+
+      if ("official" !== run.dailyAttemptType) {
         run.onlineSubmission = { status: "skipped-practice", updatedAt: new Date().toISOString() };
         saveLocalProfile();
         updateOnlineSubmissionNote(run);
@@ -2347,8 +2364,24 @@ async function __inflate(t) {
     }
 
     async function flushPendingOnlineSubmissions() {
-      const pending = localProfile.runHistory.filter(run => run && "season" === run.draftMode && run.onlineSubmission && ("pending" === run.onlineSubmission.status || "error" === run.onlineSubmission.status)).slice(0, 10);
-      for (const run of pending) await submitRunOnline(run, { silent: !0 })
+      const pending = localProfile.runHistory
+        .filter(run =>
+          run &&
+          run.isDailyChallenge &&
+          "official" === run.dailyAttemptType &&
+          run.onlineSubmission &&
+          (
+            "pending" === run.onlineSubmission.status ||
+            "error" === run.onlineSubmission.status
+          )
+        )
+        .slice(0, 10);
+
+      for (const run of pending) {
+        await submitRunOnline(run, {
+          silent: !0
+        })
+      }
     }
 
     async function renderGlobalLeaderboard() {
@@ -4854,7 +4887,7 @@ async function __inflate(t) {
 
     function useSecureServerSeason() {
       return !!(
-        SERVER_SEASON_TEST_ENABLED &&
+        SERVER_SEASON_ENABLED &&
         gt &&
         gt.serverMode &&
         gt.serverShadow &&
@@ -4911,7 +4944,7 @@ async function __inflate(t) {
 
     function trustedLeagueAwards() {
       if (
-        !SERVER_AWARDS_TEST_ENABLED ||
+        !SERVER_AWARDS_ENABLED ||
         !Ct ||
         !Ct.serverMode ||
         !Ct.serverLeagueAwards
@@ -4969,7 +5002,7 @@ async function __inflate(t) {
           state.leagueAwards
       }
 
-      if (!SERVER_PLAYER_STATS_TEST_ENABLED) {
+      if (!SERVER_PLAYER_STATS_ENABLED) {
         return
       }
 
@@ -5003,7 +5036,7 @@ async function __inflate(t) {
 
     function trustedLatestRatings() {
       if (
-        !SERVER_PLAYER_STATS_TEST_ENABLED ||
+        !SERVER_PLAYER_STATS_ENABLED ||
         !Ct ||
         !Ct.serverMode ||
         !Ct.serverLatestPlayerDetails
@@ -5453,9 +5486,22 @@ async function __inflate(t) {
     }
 
     function startSeasonFlow() {
-      return useSecureServerSeason()
-        ? startSecureServerSeason()
-        : B()
+      if (gt && gt.isDaily) {
+        return B()
+      }
+
+      if (useSecureServerSeason()) {
+        return startSecureServerSeason()
+      }
+
+      F();
+      setDraftBackendStatus(
+        "error",
+        "The secure season service is unavailable. Your completed draft is saved; retry when the connection is restored."
+      );
+      r("sumModal");
+      l("Secure season unavailable. Your draft is safely saved.");
+      return !1
     }
 
     function playNextSeasonFlow() {
@@ -5521,7 +5567,7 @@ async function __inflate(t) {
 
     async function tryResumeSecureSeason() {
       if (
-        !SERVER_SEASON_TEST_ENABLED ||
+        !SERVER_SEASON_ENABLED ||
         !DRAFT_SERVER_MODE_ENABLED
       ) return !1;
 
@@ -6144,17 +6190,9 @@ async function __inflate(t) {
     xt("resumeSavedDraftBtn").addEventListener("click", resumeChosenSecureDraft);
     xt("startNewDraftBtn").addEventListener("click", cancelSavedDraftAndStartNew);
     xt("refreshGlobalLeaderboardBtn").addEventListener("click", renderGlobalLeaderboard);
-    if (SERVER_SEASON_TEST_ENABLED) {
-      console.info("SPL Draft secure server season simulation is ENABLED.")
-    }
-    if (SERVER_PLAYER_STATS_TEST_ENABLED) {
-      console.info("SPL Draft trusted server player statistics are ENABLED.")
-    }
-    if (SERVER_AWARDS_TEST_ENABLED) {
-      console.info("SPL Draft trusted server league awards are ENABLED.")
-    }
-    if (DRAFT_SHADOW_TEST_ENABLED) console.info("SPL Draft private-backend shadow test is ENABLED.");
-    if (DRAFT_SERVER_MODE_ENABLED) console.info("SPL Draft secure server drafting is active.");
+    console.info(
+      `SPL Draft ${PHASE4_PRODUCTION_BUILD}: secure drafting, season simulation, player statistics, awards and trusted scoring are active.`
+    );
     initializeOnlineBackend().then(async () => {
       renderGlobalLeaderboard();
 
