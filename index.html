@@ -3232,7 +3232,9 @@ async function __inflate(t) {
       }
     }
 
-    let dailyPreview = null;
+    let dailyPreview = null,
+      pendingSecureDailyCurrent = null,
+      pausedDailyScreenId = null;
 
     function dailyAttemptType(challenge) {
       const history = localProfile.dailyChallengeHistory[challenge.dateKey];
@@ -3306,6 +3308,10 @@ async function __inflate(t) {
     }
 
     async function openDailyChallengeScreen() {
+      if (resumePausedDailyRun()) {
+        return
+      }
+
       const name = xt("teamNameInput").value.trim();
 
       if (!name) {
@@ -3359,9 +3365,38 @@ async function __inflate(t) {
         dailyPreview =
           serverDailyPreview(data.challenge);
 
+        pendingSecureDailyCurrent =
+          data.current &&
+          data.current.attempt &&
+          data.current.draft &&
+          [
+            "started",
+            "drafting",
+            "squad_complete",
+            "simulating"
+          ].includes(
+            data.current.attempt.status
+          )
+            ? data.current
+            : null;
+
         renderDailyChallengePreview(
           dailyPreview
-        )
+        );
+
+        if (pendingSecureDailyCurrent) {
+          const attempt =
+            pendingSecureDailyCurrent.attempt;
+
+          xt("dailyAttempt").innerHTML =
+            `<b>Resume ${"official" === attempt.attemptType ? "Official" : "Practice"} Attempt<\/b><span>Your secure Daily Challenge is still active. Continue from where you left off.<\/span>`;
+
+          xt("dailyStartBtn").textContent =
+            "Resume Daily Challenge"
+        } else {
+          xt("dailyStartBtn").textContent =
+            "Start Daily Challenge"
+        }
       } catch (error) {
         console.warn(
           "Could not load trusted Daily Challenge.",
@@ -3369,6 +3404,7 @@ async function __inflate(t) {
         );
 
         dailyPreview = null;
+        pendingSecureDailyCurrent = null;
         xt("dailyTitle").textContent =
           "Daily Challenge unavailable";
         xt("dailySettings").innerHTML =
@@ -3494,16 +3530,30 @@ async function __inflate(t) {
     }
 
     function syncDailyRunUi() {
+      const dailyActive =
+          !!(gt && gt.isDaily),
+        dailyButton =
+          document.getElementById(
+            "dailyChallengeBtn"
+          );
+
       document.body.classList.toggle(
         "daily-run-active",
-        !!(gt && gt.isDaily)
-      )
+        dailyActive
+      );
+
+      if (dailyButton) {
+        dailyButton.textContent =
+          dailyActive
+            ? "Resume Daily Challenge"
+            : "Daily Challenge"
+      }
     }
 
     let It = 0;
 
     function o() {
-      It++, F(), gt = null, Ct = null, Qt = null, Kt = [], d("sumModal"), d("swapModal"), d("navModal"), d("resumeDraftModal"), d("seasonRecoveryModal"), xt("rosterPanel").style.display = "none", xt("openSummaryBtn").style.display = "none", syncDailyRunUi(), X(!1)
+      It++, F(), gt = null, Ct = null, Qt = null, Kt = [], pausedDailyScreenId = null, pendingSecureDailyCurrent = null, d("sumModal"), d("swapModal"), d("navModal"), d("resumeDraftModal"), d("seasonRecoveryModal"), xt("rosterPanel").style.display = "none", xt("openSummaryBtn").style.display = "none", syncDailyRunUi(), X(!1)
     }
 
     function i() {
@@ -3534,10 +3584,82 @@ async function __inflate(t) {
       return "scr-season" === screenId && !!Ct && !Ct.done
     }
 
+    function pauseDailyRunToMenu(
+      options = {}
+    ) {
+      const currentScreen =
+          activeScreenId(),
+        resumableScreen =
+          "scr-season" === currentScreen
+            ? "scr-season"
+            : "scr-draft";
+
+      pausedDailyScreenId =
+        resumableScreen;
+
+      F();
+      d("sumModal");
+      d("swapModal");
+      d("navModal");
+      d("resumeDraftModal");
+      d("seasonRecoveryModal");
+
+      xt("teamNameInput").value =
+        Nt.teamName;
+
+      n(
+        "scr-menu",
+        options
+      );
+
+      syncDailyRunUi();
+
+      l(
+        "Daily Challenge saved — open Daily Challenge to resume."
+      )
+    }
+
+    function resumePausedDailyRun() {
+      if (!(gt && gt.isDaily)) {
+        pausedDailyScreenId = null;
+        return !1
+      }
+
+      const target =
+        pausedDailyScreenId ||
+        (Ct ? "scr-season" : "scr-draft");
+
+      pausedDailyScreenId = null;
+
+      if ("scr-draft" === target) {
+        H();
+        U()
+      }
+
+      n(target);
+      syncDailyRunUi();
+
+      l("Daily Challenge resumed.");
+
+      return !0
+    }
+
     function returnToMainMenu() {
       const nameInput = xt("teamNameInput");
-      const typedName = nameInput ? nameInput.value.trim() : "";
-      typedName && persistTeamName(typedName), b()
+      const typedName =
+        nameInput
+          ? nameInput.value.trim()
+          : "";
+
+      typedName &&
+        persistTeamName(typedName);
+
+      if (gt && gt.isDaily) {
+        pauseDailyRunToMenu();
+        return
+      }
+
+      b()
     }
 
     function handleGlobalHome(trigger) {
@@ -3548,18 +3670,76 @@ async function __inflate(t) {
         });
         return
       }
-      hasUnsavedRunProgress() ? m("Return home?", "Return home? Your current run progress will be lost.", "Return Home", returnToMainMenu, trigger) : returnToMainMenu()
+      if (gt && gt.isDaily) {
+        m(
+          "Return home?",
+          "Your Daily Challenge will stay saved. Open Daily Challenge from the home screen to resume it.",
+          "Return Home",
+          returnToMainMenu,
+          trigger
+        );
+        return
+      }
+
+      hasUnsavedRunProgress()
+        ? m(
+            "Return home?",
+            "Return home? Your current run progress will be lost.",
+            "Return Home",
+            returnToMainMenu,
+            trigger
+          )
+        : returnToMainMenu()
     }
 
     function returnHomeFromBrowserBack() {
-      const nameInput = xt("teamNameInput"),
-        typedName = nameInput ? nameInput.value.trim() : "";
-      typedName && persistTeamName(typedName);
+      const nameInput =
+          xt("teamNameInput"),
+        typedName =
+          nameInput
+            ? nameInput.value.trim()
+            : "";
+
+      typedName &&
+        persistTeamName(typedName);
+
+      if (gt && gt.isDaily) {
+        pauseDailyRunToMenu({
+          fromHistory: true
+        });
+
+        history.replaceState(
+          {
+            splDraft: true,
+            screen: "scr-menu"
+          },
+          "",
+          location.href
+        );
+
+        return
+      }
+
       o();
       i();
-      xt("teamNameInput").value = Nt.teamName;
-      n("scr-menu", { fromHistory: true });
-      history.replaceState({ splDraft: true, screen: "scr-menu" }, "", location.href)
+      xt("teamNameInput").value =
+        Nt.teamName;
+
+      n(
+        "scr-menu",
+        {
+          fromHistory: true
+        }
+      );
+
+      history.replaceState(
+        {
+          splDraft: true,
+          screen: "scr-menu"
+        },
+        "",
+        location.href
+      )
     }
 
     function initializeBrowserBackNavigation() {
@@ -3568,6 +3748,27 @@ async function __inflate(t) {
       window.addEventListener("popstate", () => {
         const currentScreen = activeScreenId();
         if (!currentScreen || "scr-menu" === currentScreen) return;
+        if (gt && gt.isDaily) {
+          history.pushState(
+            {
+              splDraft: true,
+              screen: currentScreen
+            },
+            "",
+            location.href
+          );
+
+          m(
+            "Return home?",
+            "Your Daily Challenge will stay saved. Open Daily Challenge from the home screen to resume it.",
+            "Return Home",
+            returnHomeFromBrowserBack,
+            xt("globalHomeBtn")
+          );
+
+          return
+        }
+
         if (hasUnsavedRunProgress()) {
           history.pushState({ splDraft: true, screen: currentScreen }, "", location.href);
           m("Return home?", "Return home? Your current run progress will be lost.", "Return Home", returnHomeFromBrowserBack, xt("globalHomeBtn"));
@@ -4481,6 +4682,59 @@ async function __inflate(t) {
       ] = entry;
 
       saveLocalProfile()
+    }
+
+    async function resumeSecureDailyCurrent(
+      current
+    ) {
+      if (
+        !current ||
+        !current.attempt ||
+        !current.draft
+      ) return !1;
+
+      const attempt = current.attempt,
+        draft = current.draft;
+
+      recordSecureDailyAttemptStart(
+        attempt
+      );
+
+      saveSecureDailyResumeMarker(
+        attempt.attemptId,
+        draft.runId
+      );
+
+      if (
+        "simulating" === attempt.status &&
+        readSecureSeasonResumeMarker()
+      ) {
+        pendingSecureDailyCurrent = null;
+
+        const restored =
+          await tryResumeSecureSeason();
+
+        if (restored) {
+          l(
+            "Secure Daily season restored."
+          )
+        }
+
+        return restored
+      }
+
+      rebuildSecureDraftFromServerState(
+        draft,
+        attempt
+      );
+
+      pendingSecureDailyCurrent = null;
+
+      l(
+        "Secure Daily Challenge restored."
+      );
+
+      return !0
     }
 
     async function startSecureDailyChallenge() {
@@ -6740,8 +6994,45 @@ async function __inflate(t) {
     xt("howtoBtn").addEventListener("click", () => n("scr-howto"));
     xt("howtoBackBtn").addEventListener("click", () => n("scr-menu"));
     xt("dailyBackBtn").addEventListener("click", () => n("scr-menu"));
-    xt("dailyStartBtn").addEventListener("click", () => {
+    xt("dailyStartBtn").addEventListener("click", async () => {
       if (SERVER_DAILY_TEST_ENABLED) {
+        if (pendingSecureDailyCurrent) {
+          const button =
+            xt("dailyStartBtn");
+
+          button.disabled = !0;
+          button.textContent =
+            "Restoring Daily Challenge…";
+
+          try {
+            const restored =
+              await resumeSecureDailyCurrent(
+                pendingSecureDailyCurrent
+              );
+
+            if (!restored) {
+              throw new Error(
+                "DAILY_RESUME_REJECTED"
+              )
+            }
+          } catch (error) {
+            console.warn(
+              "Could not restore the saved Daily Challenge.",
+              error
+            );
+
+            button.disabled = !1;
+            button.textContent =
+              "Resume Daily Challenge";
+
+            l(
+              "Could not restore the saved Daily Challenge."
+            )
+          }
+
+          return
+        }
+
         startSecureDailyChallenge();
         return
       }
