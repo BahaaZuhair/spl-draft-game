@@ -571,6 +571,7 @@ table.lg tr:nth-child(-n+3) td.pos{color:var(--gold);font-weight:700}
           <button data-period="all">All Time</button>
         </div>
         <div class="tablewrap local-table" style="margin-top:12px">
+          <div id="myGlobalRank" class="resume-draft-note" style="margin:0 0 10px"></div>
           <table class="lg">
             <thead><tr><th>#</th><th>Team</th><th>Score</th><th>Date</th><th>Difficulty</th><th>Draft</th><th>OVR</th><th>Finish</th><th>Pts</th><th>GD</th></tr></thead>
             <tbody id="globalLeaderboardBody"><tr><td colspan="10" class="empty">Connecting to the online leaderboard…</td></tr></tbody>
@@ -1396,8 +1397,12 @@ async function __inflate(t) {
       SERVER_SEASON_ENABLED = !0,
       SERVER_PLAYER_STATS_ENABLED = !0,
       SERVER_AWARDS_ENABLED = !0,
+      SERVER_DAILY_TEST_ENABLED =
+        new URLSearchParams(window.location.search).get("serverDaily") === "1",
       PHASE4_PRODUCTION_BUILD = "phase4-final-2026-07-15",
+      PHASE5_DAILY_TEST_BUILD = "phase5-daily-gated-2026-07-16",
       SERVER_DRAFT_RESUME_KEY = "spl_draft_secure_run_v1",
+      SERVER_DAILY_RESUME_KEY = "spl_draft_secure_daily_v1",
       SERVER_SEASON_RESUME_KEY = "spl_draft_secure_season_v1",
       RUN_HISTORY_LIMIT = 100,
       RUN_SCORE_CONFIG = {
@@ -1662,6 +1667,20 @@ async function __inflate(t) {
 
     function saveSecureDraftResumeMarker(serverRunId) {
       if (!serverRunId) return;
+
+      if (
+        SERVER_DAILY_TEST_ENABLED &&
+        gt &&
+        gt.isDaily &&
+        gt.dailyAttemptId
+      ) {
+        saveSecureDailyResumeMarker(
+          gt.dailyAttemptId,
+          serverRunId
+        );
+        return
+      }
+
       try {
         localStorage.setItem(
           SERVER_DRAFT_RESUME_KEY,
@@ -1676,6 +1695,53 @@ async function __inflate(t) {
     function clearSecureDraftResumeMarker() {
       try {
         localStorage.removeItem(SERVER_DRAFT_RESUME_KEY)
+      } catch {}
+    }
+
+    function saveSecureDailyResumeMarker(
+      attemptId,
+      serverRunId
+    ) {
+      if (!attemptId || !serverRunId) return;
+
+      try {
+        localStorage.setItem(
+          SERVER_DAILY_RESUME_KEY,
+          JSON.stringify({
+            attemptId,
+            serverRunId,
+            updatedAt: new Date().toISOString()
+          })
+        )
+      } catch {}
+    }
+
+    function readSecureDailyResumeMarker() {
+      try {
+        const raw =
+          localStorage.getItem(
+            SERVER_DAILY_RESUME_KEY
+          );
+
+        if (!raw) return null;
+
+        const parsed = JSON.parse(raw);
+
+        return parsed &&
+          typeof parsed.attemptId === "string" &&
+          typeof parsed.serverRunId === "string"
+            ? parsed
+            : null
+      } catch {
+        return null
+      }
+    }
+
+    function clearSecureDailyResumeMarker() {
+      try {
+        localStorage.removeItem(
+          SERVER_DAILY_RESUME_KEY
+        )
       } catch {}
     }
 
@@ -2392,10 +2458,18 @@ async function __inflate(t) {
       body.innerHTML = '<tr><td colspan="10" class="empty">Loading global scores…<\/td><\/tr>';
       try {
         await initializeOnlineBackend();
-        const { data, error } = await onlineClient.rpc("get_global_leaderboard", {
-          p_period: globalLeaderboardPeriod,
-          p_limit: 10
-        });
+        const { data, error } = await onlineClient.rpc(
+          SERVER_DAILY_TEST_ENABLED
+            ? "get_global_leaderboard_v2"
+            : "get_global_leaderboard",
+          {
+            p_period: globalLeaderboardPeriod,
+            p_limit:
+              SERVER_DAILY_TEST_ENABLED
+                ? 100
+                : 10
+          }
+        );
         if (error) throw error;
         const rows = (Array.isArray(data) ? data : []).filter(row => row && "season" === row.draft_mode);
         body.innerHTML = rows.length ? rows.map(row => `<tr>
@@ -2409,7 +2483,42 @@ async function __inflate(t) {
           <td>${ordinal(row.final_position)}<\/td>
           <td>${Math.round(+row.points || 0)}<\/td>
           <td>${+row.goal_difference > 0 ? "+" : ""}${Math.round(+row.goal_difference || 0)}<\/td>
-        <\/tr>`).join("") : '<tr><td colspan="10" class="empty">No global scores in this period yet.<\/td><\/tr>'
+        <\/tr>`).join("") : '<tr><td colspan="10" class="empty">No global scores in this period yet.<\/td><\/tr>';
+
+        const myRankNode =
+          document.getElementById(
+            "myGlobalRank"
+          );
+
+        if (
+          SERVER_DAILY_TEST_ENABLED &&
+          myRankNode
+        ) {
+          const rankResult =
+            await onlineClient.rpc(
+              "get_my_global_leaderboard_rank",
+              {
+                p_period:
+                  globalLeaderboardPeriod
+              }
+            );
+
+          if (rankResult.error) {
+            myRankNode.textContent =
+              "Your rank is temporarily unavailable."
+          } else {
+            const rank =
+              rankResult.data || {};
+
+            myRankNode.textContent =
+              rank.hasScore
+                ? `Your rank: ${rank.rankLabel} · Best score: ${Math.round(+(
+                    rank.bestScore &&
+                    rank.bestScore.score
+                  ) || 0).toLocaleString()}`
+                : "Your rank: Unranked"
+          }
+        }
       } catch (error) {
         console.warn("Could not load global leaderboard.", error);
         body.innerHTML = '<tr><td colspan="10" class="empty">Global leaderboard unavailable. Local records still work normally.<\/td><\/tr>'
@@ -2667,7 +2776,22 @@ async function __inflate(t) {
               goalsAgainst: +trustedSeasonResult.goalsAgainst,
               goalDifference: +trustedSeasonResult.goalDifference,
               points: +trustedSeasonResult.points,
-              cleanSheets: +trustedSeasonResult.cleanSheets
+              cleanSheets: +trustedSeasonResult.cleanSheets,
+              isDailyChallenge:
+                trustedSeasonResult.isDailyChallenge === true ||
+                runData.isDailyChallenge,
+              dailyChallengeDate:
+                trustedSeasonResult.challengeDate ||
+                runData.dailyChallengeDate ||
+                null,
+              challengeId:
+                trustedSeasonResult.challengeId ||
+                runData.challengeId ||
+                null,
+              dailyAttemptType:
+                trustedSeasonResult.dailyAttemptType ||
+                runData.dailyAttemptType ||
+                null
             }
           : runData,
         scoreBreakdown =
@@ -3128,23 +3252,126 @@ async function __inflate(t) {
       return attemptType
     }
 
-    function openDailyChallengeScreen() {
+    function renderDailyChallengePreview(preview) {
+      const attempt =
+        preview.serverManaged
+          ? preview.attemptType
+          : dailyAttemptType(preview);
+
+      xt("dailyTitle").textContent =
+        `Daily Challenge — ${formatRunDate(`${preview.dateKey}T12:00:00Z`)}`;
+
+      xt("dailySettings").innerHTML =
+        `<div><span>Challenge ID<\/span><b>${escapeHtml(preview.challengeId)}<\/b><\/div>
+        <div><span>Formation<\/span><b>${escapeHtml(preview.formation)}<\/b><\/div>
+        <div><span>Difficulty<\/span><b>${"hard" === preview.difficulty ? "Hard Mode — No Skips" : "Normal Mode — 2 Skips"}<\/b><\/div>
+        <div><span>Draft mode<\/span><b>${"alltime" === preview.mode ? "Max Rating All-Time" : "Ratings by Season"}<\/b><\/div>`;
+
+      xt("dailyAttempt").innerHTML =
+        "official" === attempt
+          ? "<b>Official Attempt<\/b><span>Your first attempt today will be recorded as your official Daily Challenge score. Later attempts are practice.<\/span>"
+          : "<b>Practice Attempt<\/b><span>Your official attempt for today has already started. This run will not replace its result.<\/span>";
+
+      n("scr-daily")
+    }
+
+    function serverDailyPreview(challenge) {
+      return {
+        dateKey: challenge.challengeDate,
+        challengeId: challenge.challengeId,
+        fkey: challenge.formationCode,
+        formation:
+          challenge.formationName ||
+          challenge.formationCode,
+        skips: +challenge.skips,
+        difficulty: challenge.difficulty,
+        mode: challenge.draftMode,
+        attemptType:
+          challenge.nextAttemptType || "official",
+        officialAttemptAvailable:
+          challenge.officialAttemptAvailable,
+        attemptId:
+          challenge.officialAttempt &&
+          challenge.officialAttempt.attemptId ||
+          null,
+        serverManaged: !0
+      }
+    }
+
+    async function openDailyChallengeScreen() {
       const name = xt("teamNameInput").value.trim();
+
       if (!name) {
         xt("nameErr").style.display = "block";
         xt("teamNameInput").focus();
         return
       }
+
       persistTeamName(name);
-      dailyPreview = buildDailyChallenge();
-      const attempt = dailyAttemptType(dailyPreview);
-      xt("dailyTitle").textContent = `Daily Challenge — ${formatRunDate(`${dailyPreview.dateKey}T12:00:00Z`)}`;
-      xt("dailySettings").innerHTML = `<div><span>Challenge ID<\/span><b>${escapeHtml(dailyPreview.challengeId)}<\/b><\/div>
-        <div><span>Formation<\/span><b>${escapeHtml(dailyPreview.formation)}<\/b><\/div>
-        <div><span>Difficulty<\/span><b>${"hard" === dailyPreview.difficulty ? "Hard Mode — No Skips" : "Normal Mode — 2 Skips"}<\/b><\/div>
-        <div><span>Draft mode<\/span><b>${"alltime" === dailyPreview.mode ? "Max Rating All-Time" : "Ratings by Season"}<\/b><\/div>`;
-      xt("dailyAttempt").innerHTML = "official" === attempt ? "<b>Official Attempt<\/b><span>Your first attempt today will be recorded as your official Daily Challenge score. Later attempts are practice.<\/span>" : "<b>Practice Attempt<\/b><span>Your official attempt for today has already started. This run will not replace its result.<\/span>";
-      n("scr-daily")
+
+      if (!SERVER_DAILY_TEST_ENABLED) {
+        dailyPreview = buildDailyChallenge();
+        renderDailyChallengePreview(dailyPreview);
+        return
+      }
+
+      xt("dailyTitle").textContent =
+        "Daily Challenge — loading…";
+      xt("dailySettings").innerHTML =
+        '<div><span>Status<\/span><b>Reading today’s trusted challenge…<\/b><\/div>';
+      xt("dailyAttempt").innerHTML =
+        "<b>Secure Daily Test<\/b><span>The server owns the formation, difficulty, attempt type, roulette and final score.<\/span>";
+      xt("dailyStartBtn").disabled = !0;
+      n("scr-daily");
+
+      try {
+        await initializeOnlineBackend();
+
+        const { data, error } =
+          await onlineClient.functions.invoke(
+            "daily-challenge",
+            {
+              body: {}
+            }
+          );
+
+        if (error) throw error;
+
+        if (
+          !data ||
+          !data.ok ||
+          !data.challenge
+        ) {
+          throw new Error(
+            data &&
+            data.errorCode ||
+            "DAILY_CHALLENGE_UNAVAILABLE"
+          )
+        }
+
+        dailyPreview =
+          serverDailyPreview(data.challenge);
+
+        renderDailyChallengePreview(
+          dailyPreview
+        )
+      } catch (error) {
+        console.warn(
+          "Could not load trusted Daily Challenge.",
+          error
+        );
+
+        dailyPreview = null;
+        xt("dailyTitle").textContent =
+          "Daily Challenge unavailable";
+        xt("dailySettings").innerHTML =
+          '<div><span>Status<\/span><b>Could not load the secure challenge.<\/b><\/div>';
+        xt("dailyAttempt").innerHTML =
+          "<b>Try again<\/b><span>Check the connection and Edge Function logs, then reopen Daily Challenge.<\/span>"
+      } finally {
+        xt("dailyStartBtn").disabled =
+          !dailyPreview
+      }
     }
 
     function buildDailyDraftPlan(challenge, slots) {
@@ -3448,7 +3675,14 @@ async function __inflate(t) {
           offer.fittingSlotIndexes
         )
           ? offer.fittingSlotIndexes.map(Number)
-          : []
+          : [],
+        targetIdx:
+          Array.isArray(
+            offer.fittingSlotIndexes
+          ) &&
+          offer.fittingSlotIndexes.length
+            ? +offer.fittingSlotIndexes[0]
+            : null
       }
     }
 
@@ -3666,7 +3900,9 @@ async function __inflate(t) {
 
         const { data, error } =
           await onlineClient.functions.invoke(
-            "roll-draft",
+            gt.isDaily
+              ? "roll-daily"
+              : "roll-draft",
             {
               body: {
                 runId: gt.serverShadow.serverRunId,
@@ -3758,7 +3994,11 @@ async function __inflate(t) {
         gt.rolling = !1;
         setQueuedRollVisual(!1);
         xt("rollBtn").disabled = !0;
-        clearSecureDraftResumeMarker();
+        if (gt.isDaily) {
+          clearSecureDailyResumeMarker()
+        } else {
+          clearSecureDraftResumeMarker()
+        }
 
         setDraftBackendStatus(
           "ok",
@@ -3922,7 +4162,9 @@ async function __inflate(t) {
 
         const { data, error } =
           await onlineClient.functions.invoke(
-            "select-player",
+            gt.isDaily
+              ? "select-daily-player"
+              : "select-player",
             {
               body: {
                 runId: gt.serverShadow.serverRunId,
@@ -3975,7 +4217,8 @@ async function __inflate(t) {
     }
 
     function rebuildSecureDraftFromServerState(
-      state
+      state,
+      dailyAttempt = null
     ) {
       if (
         !state ||
@@ -3992,11 +4235,42 @@ async function __inflate(t) {
       const formation = Xt[state.formationCode],
         stateSlots = Array.isArray(state.slots)
           ? state.slots
-          : [];
+          : [],
+        isDaily =
+          SERVER_DAILY_TEST_ENABLED &&
+          state.isDailyChallenge === true,
+        dailyChallenge =
+          isDaily
+            ? {
+                dateKey:
+                  dailyAttempt &&
+                  dailyAttempt.challenge &&
+                  dailyAttempt.challenge.challengeDate ||
+                  state.challengeDate ||
+                  new Date().toISOString().slice(0, 10),
+                challengeId:
+                  dailyAttempt &&
+                  dailyAttempt.challenge &&
+                  dailyAttempt.challenge.challengeId ||
+                  state.challengeId ||
+                  "",
+                fkey: state.formationCode,
+                formation:
+                  dailyAttempt &&
+                  dailyAttempt.challenge &&
+                  dailyAttempt.challenge.formationName ||
+                  state.formationName ||
+                  state.formationCode,
+                skips: +state.skipsInitial,
+                difficulty: state.difficulty,
+                mode: state.draftMode,
+                serverManaged: !0
+              }
+            : null;
 
       gt = {
         runId: state.clientRunId ||
-          makeRunId("run"),
+          makeRunId(isDaily ? "daily" : "run"),
         fkey: state.formationCode,
         mode: state.draftMode,
         skipsLeft: +state.skipsLeft,
@@ -4036,9 +4310,20 @@ async function __inflate(t) {
         rolling: !1,
         complete:
           "squad_complete" === state.status,
-        isDaily: !1,
-        challenge: null,
-        dailyAttemptType: null,
+        isDaily,
+        challenge: dailyChallenge,
+        dailyAttemptType:
+          isDaily
+            ? dailyAttempt &&
+              dailyAttempt.attemptType ||
+              null
+            : null,
+        dailyAttemptId:
+          isDaily
+            ? dailyAttempt &&
+              dailyAttempt.attemptId ||
+              null
+            : null,
         dailyPlan: null,
         dailyPickIndex: 0,
         dailyChoiceIndex: 0,
@@ -4071,7 +4356,7 @@ async function __inflate(t) {
 
       Kt = [];
       xt("formName").textContent =
-        formation.name;
+        `${formation.name}${isDaily ? " · DAILY CHALLENGE" : ""}`;
       xt("openSummaryBtn").style.display =
         "none";
       xt("rosterPanel").style.display =
@@ -4129,6 +4414,211 @@ async function __inflate(t) {
       xt("rosterPanel").style.display = "none";
       gt.roll = null;
       X(!1)
+    }
+
+    function recordSecureDailyAttemptStart(attempt) {
+      if (
+        !attempt ||
+        !attempt.challenge ||
+        !attempt.challenge.challengeDate
+      ) return;
+
+      const dateKey =
+          attempt.challenge.challengeDate,
+        previous =
+          safeObject(
+            localProfile.dailyChallengeHistory[
+              dateKey
+            ]
+          ),
+        entry = {
+          ...previous,
+          firstAttemptStartedAt:
+            "official" === attempt.attemptType
+              ? previous.firstAttemptStartedAt ||
+                attempt.startedAt ||
+                new Date().toISOString()
+              : previous.firstAttemptStartedAt ||
+                null,
+          status: "started",
+          challengeId:
+            attempt.challenge.challengeId,
+          formation:
+            attempt.challenge.formationName ||
+            attempt.challenge.formationCode,
+          fkey:
+            attempt.challenge.formationCode,
+          difficulty:
+            attempt.challenge.difficulty,
+          draftMode:
+            attempt.challenge.draftMode
+        };
+
+      localProfile.dailyChallengeHistory[
+        dateKey
+      ] = entry;
+
+      saveLocalProfile()
+    }
+
+    async function startSecureDailyChallenge() {
+      if (
+        !SERVER_DAILY_TEST_ENABLED ||
+        !dailyPreview
+      ) return;
+
+      const button = xt("dailyStartBtn"),
+        clientRunId = makeRunId("daily");
+
+      button.disabled = !0;
+      button.textContent =
+        "Starting secure Daily…";
+
+      try {
+        await initializeOnlineBackend();
+
+        const { data, error } =
+          await onlineClient.functions.invoke(
+            "start-daily",
+            {
+              body: {
+                clientRunId,
+                teamName: Jt()
+              }
+            }
+          );
+
+        if (error) throw error;
+
+        if (
+          !data ||
+          !data.ok ||
+          !data.attempt ||
+          !data.draft
+        ) {
+          throw new Error(
+            data &&
+            data.errorCode ||
+            "START_DAILY_REJECTED"
+          )
+        }
+
+        registerRunStarted();
+        recordSecureDailyAttemptStart(
+          data.attempt
+        );
+
+        rebuildSecureDraftFromServerState(
+          data.draft,
+          data.attempt
+        );
+
+        saveSecureDailyResumeMarker(
+          data.attempt.attemptId,
+          data.draft.runId
+        );
+
+        setDraftBackendStatus(
+          "ok",
+          `✓ Secure Daily ${data.attempt.attemptType} attempt active. The server controls every pool, skip and selection.`
+        );
+
+        l(
+          "Secure Daily Challenge started."
+        )
+      } catch (error) {
+        console.warn(
+          "Could not start secure Daily Challenge.",
+          error
+        );
+
+        setDraftBackendStatus(
+          "error",
+          "Secure Daily Challenge could not start. Check the Edge Function logs and retry."
+        );
+
+        l(
+          "Secure Daily Challenge could not start."
+        )
+      } finally {
+        button.disabled = !1;
+        button.textContent =
+          "Start Daily Challenge"
+      }
+    }
+
+    async function tryResumeSecureDailyChallenge() {
+      if (!SERVER_DAILY_TEST_ENABLED) return !1;
+
+      const marker =
+        readSecureDailyResumeMarker();
+
+      if (
+        !marker ||
+        !marker.attemptId
+      ) return !1;
+
+      try {
+        await initializeOnlineBackend();
+
+        const { data, error } =
+          await onlineClient.functions.invoke(
+            "daily-challenge",
+            {
+              body: {
+                attemptId: marker.attemptId
+              }
+            }
+          );
+
+        if (error) throw error;
+
+        if (
+          !data ||
+          !data.ok ||
+          !data.current ||
+          !data.current.attempt ||
+          !data.current.draft
+        ) {
+          clearSecureDailyResumeMarker();
+          return !1
+        }
+
+        const attempt =
+            data.current.attempt,
+          draft =
+            data.current.draft;
+
+        if (
+          "cancelled" === attempt.status ||
+          "expired" === attempt.status
+        ) {
+          clearSecureDailyResumeMarker();
+          return !1
+        }
+
+        recordSecureDailyAttemptStart(
+          attempt
+        );
+
+        rebuildSecureDraftFromServerState(
+          draft,
+          attempt
+        );
+
+        l(
+          "Secure Daily Challenge restored."
+        );
+
+        return !0
+      } catch (error) {
+        console.warn(
+          "Could not restore secure Daily Challenge.",
+          error
+        );
+
+        return !1
+      }
     }
 
     let pendingSecureResumeState = null,
@@ -4321,7 +4811,15 @@ async function __inflate(t) {
     }
 
     function z(t) {
-      if (DRAFT_SERVER_MODE_ENABLED && gt && gt.serverMode && !gt.isDaily) {
+      if (
+        DRAFT_SERVER_MODE_ENABLED &&
+        gt &&
+        gt.serverMode &&
+        (
+          !gt.isDaily ||
+          SERVER_DAILY_TEST_ENABLED
+        )
+      ) {
         return void runServerDraftRoll(t)
       }
       if (gt.rolling || gt.complete || gt.pendingPlayer) return;
@@ -4471,7 +4969,15 @@ async function __inflate(t) {
     }
 
     function S(t, s) {
-      if (DRAFT_SERVER_MODE_ENABLED && gt && gt.serverMode && !gt.isDaily) {
+      if (
+        DRAFT_SERVER_MODE_ENABLED &&
+        gt &&
+        gt.serverMode &&
+        (
+          !gt.isDaily ||
+          SERVER_DAILY_TEST_ENABLED
+        )
+      ) {
         return void runServerDraftSelection(t, s)
       }
       gt.slots[s].player = t;
@@ -4892,7 +5398,10 @@ async function __inflate(t) {
         gt.serverMode &&
         gt.serverShadow &&
         gt.serverShadow.serverRunId &&
-        !gt.isDaily
+        (
+          !gt.isDaily ||
+          SERVER_DAILY_TEST_ENABLED
+        )
       )
     }
 
@@ -5486,7 +5995,11 @@ async function __inflate(t) {
     }
 
     function startSeasonFlow() {
-      if (gt && gt.isDaily) {
+      if (
+        gt &&
+        gt.isDaily &&
+        !SERVER_DAILY_TEST_ENABLED
+      ) {
         return B()
       }
 
@@ -6171,7 +6684,16 @@ async function __inflate(t) {
     xt("howtoBackBtn").addEventListener("click", () => n("scr-menu"));
     xt("dailyBackBtn").addEventListener("click", () => n("scr-menu"));
     xt("dailyStartBtn").addEventListener("click", () => {
-      if (!dailyPreview) dailyPreview = buildDailyChallenge();
+      if (SERVER_DAILY_TEST_ENABLED) {
+        startSecureDailyChallenge();
+        return
+      }
+
+      if (!dailyPreview) {
+        dailyPreview =
+          buildDailyChallenge()
+      }
+
       startDraftRun({
         challenge: dailyPreview
       })
@@ -6193,6 +6715,12 @@ async function __inflate(t) {
     console.info(
       `SPL Draft ${PHASE4_PRODUCTION_BUILD}: secure drafting, season simulation, player statistics, awards and trusted scoring are active.`
     );
+
+    if (SERVER_DAILY_TEST_ENABLED) {
+      console.info(
+        `SPL Draft ${PHASE5_DAILY_TEST_BUILD}: trusted Daily Challenge test is ENABLED.`
+      )
+    }
     initializeOnlineBackend().then(async () => {
       renderGlobalLeaderboard();
 
@@ -6202,6 +6730,16 @@ async function __inflate(t) {
 
         if (seasonMarker) {
           await tryResumeSecureSeason()
+        } else if (
+          SERVER_DAILY_TEST_ENABLED &&
+          readSecureDailyResumeMarker()
+        ) {
+          const resumedDaily =
+            await tryResumeSecureDailyChallenge();
+
+          if (!resumedDaily) {
+            await tryResumeSecureDraft()
+          }
         } else {
           await tryResumeSecureDraft()
         }
