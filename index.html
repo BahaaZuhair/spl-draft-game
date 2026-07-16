@@ -3340,13 +3340,20 @@ async function __inflate(t) {
       try {
         await initializeOnlineBackend();
 
-        const { data, error } =
-          await onlineClient.functions.invoke(
-            "daily-challenge",
-            {
-              body: {}
-            }
-          );
+        const savedDailyMarker =
+            readSecureDailyResumeMarker(),
+          { data, error } =
+            await onlineClient.functions.invoke(
+              "daily-challenge",
+              {
+                body: {
+                  attemptId:
+                    savedDailyMarker &&
+                    savedDailyMarker.attemptId ||
+                    null
+                }
+              }
+            );
 
         if (error) throw error;
 
@@ -7110,7 +7117,7 @@ async function __inflate(t) {
       _t = "Return home? Your current draft progress will be lost.";
     xt("globalHomeBtn").addEventListener("click", event => handleGlobalHome(event.currentTarget));
     initializeBrowserBackNavigation();
-    xt("homeBtn").addEventListener("click", t => m("Return home?", _t, "Return Home", b, t.currentTarget)), xt("draftRestartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartRunBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("scoreRestartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartCtlBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("navCancel").addEventListener("click", () => W(!1)), xt("navConfirm").addEventListener("click", () => W(!0)), xt("navModal").addEventListener("keydown", t => {
+    xt("homeBtn").addEventListener("click", event => handleGlobalHome(event.currentTarget)), xt("draftRestartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartRunBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("scoreRestartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartCtlBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("navCancel").addEventListener("click", () => W(!1)), xt("navConfirm").addEventListener("click", () => W(!0)), xt("navModal").addEventListener("keydown", t => {
       "Escape" === t.key && W(!1)
     }), xt("rollBtn").addEventListener("click", () => z(!1)), xt("skipBtn").addEventListener("click", () => z(!0)), document.getElementById("serverRollTestBtn").addEventListener("click", runServerRouletteShadowTest), document.getElementById("serverSkipTestBtn").addEventListener("click", runServerSkipShadowTest), document.getElementById("serverSelectTestBtn").addEventListener("click", runServerSelectionShadowTest), xt("startSimBtn").addEventListener("click", startSeasonFlow), xt("editPosBtn").addEventListener("click", () => {
       F(), d("sumModal"), xt("openSummaryBtn").style.display = "inline-block"
