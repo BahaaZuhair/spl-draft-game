@@ -842,6 +842,30 @@ body.daily-run-active #restartCtlBtn{
   </div>
 </div>
 
+<!-- Daily Challenge continue/start-over modal -->
+<div class="modal" id="dailyRunChoiceModal" role="dialog" aria-modal="true" aria-labelledby="dailyRunChoiceTitle">
+  <div class="mbox">
+    <h2 id="dailyRunChoiceTitle">Daily Challenge</h2>
+    <div class="sub" id="dailyRunChoiceText"></div>
+
+    <div class="resume-draft-summary">
+      <div class="item"><span>Attempt</span><b id="dailyRunChoiceType">—</b></div>
+      <div class="item"><span>Status</span><b id="dailyRunChoiceStatus">—</b></div>
+      <div class="item"><span>Formation</span><b id="dailyRunChoiceFormation">—</b></div>
+      <div class="item"><span>Difficulty</span><b id="dailyRunChoiceDifficulty">—</b></div>
+    </div>
+
+    <div id="dailyRunChoiceWarning" class="resume-draft-note"></div>
+    <div id="dailyRunChoiceError" class="resume-draft-error" role="alert"></div>
+
+    <div class="actions">
+      <button class="btn" id="continueDailyRunBtn" type="button">Continue</button>
+      <button class="btn ghost" id="startOverDailyRunBtn" type="button">Start Over</button>
+      <button class="btn ghost" id="cancelDailyRunChoiceBtn" type="button">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- navigation confirmation modal -->
 <div class="modal" id="navModal">
   <div class="mbox">
@@ -3234,7 +3258,10 @@ async function __inflate(t) {
 
     let dailyPreview = null,
       pendingSecureDailyCurrent = null,
-      pausedDailyScreenId = null;
+      pausedDailyScreenId = null,
+      dailyRunChoiceCurrent = null,
+      dailyRunChoiceSource = null,
+      dailyRunChoiceBusy = !1;
 
     function dailyAttemptType(challenge) {
       const history = localProfile.dailyChallengeHistory[challenge.dateKey];
@@ -3307,8 +3334,476 @@ async function __inflate(t) {
       }
     }
 
+    function dailyAttemptStatusLabel(status) {
+      return {
+        started: "Starting",
+        drafting: "Draft in progress",
+        squad_complete: "Squad complete",
+        simulating: "Season in progress",
+        completed: "Season completed",
+        cancelled: "Cancelled",
+        expired: "Expired"
+      }[status] || "Saved"
+    }
+
+    function memoryDailyCurrent() {
+      if (!(gt && gt.isDaily)) return null;
+
+      return {
+        attempt: {
+          attemptId:
+            gt.dailyAttemptId || null,
+          attemptType:
+            gt.dailyAttemptType || "practice",
+          status:
+            Ct && Ct.done
+              ? "completed"
+              : Ct
+                ? "simulating"
+                : gt.complete
+                  ? "squad_complete"
+                  : "drafting",
+          challenge:
+            gt.challenge || dailyPreview || null
+        },
+        draft: {
+          runId:
+            gt.serverShadow &&
+            gt.serverShadow.serverRunId ||
+            null,
+          formationCode:
+            gt.fkey,
+          formationName:
+            gt.form &&
+            gt.form.name ||
+            gt.fkey,
+          difficulty:
+            gt.difficulty
+        }
+      }
+    }
+
+    function setDailyRunChoiceBusy(isBusy) {
+      dailyRunChoiceBusy = !!isBusy;
+
+      xt("continueDailyRunBtn").disabled =
+        dailyRunChoiceBusy;
+      xt("startOverDailyRunBtn").disabled =
+        dailyRunChoiceBusy;
+      xt("cancelDailyRunChoiceBtn").disabled =
+        dailyRunChoiceBusy
+    }
+
+    function closeDailyRunChoiceModal() {
+      if (dailyRunChoiceBusy) return;
+
+      d("dailyRunChoiceModal");
+      dailyRunChoiceCurrent = null;
+      dailyRunChoiceSource = null;
+      xt("dailyRunChoiceError").classList.remove("on")
+    }
+
+    function showDailyRunChoiceModal(
+      current,
+      source = "server"
+    ) {
+      if (
+        !current ||
+        !current.attempt
+      ) return;
+
+      const attempt = current.attempt,
+        draft = current.draft || {},
+        challenge =
+          attempt.challenge ||
+          dailyPreview ||
+          {},
+        official =
+          "official" === attempt.attemptType,
+        completed =
+          "completed" === attempt.status;
+
+      dailyRunChoiceCurrent = current;
+      dailyRunChoiceSource = source;
+
+      xt("dailyRunChoiceTitle").textContent =
+        completed
+          ? "Daily Challenge completed"
+          : "Daily Challenge in progress";
+
+      xt("dailyRunChoiceText").textContent =
+        completed
+          ? "Continue to review this attempt, or start a new Practice attempt."
+          : "Continue from where you stopped, or start over with a fresh run.";
+
+      xt("dailyRunChoiceType").textContent =
+        official
+          ? "Official"
+          : "Practice";
+
+      xt("dailyRunChoiceStatus").textContent =
+        dailyAttemptStatusLabel(
+          attempt.status
+        );
+
+      xt("dailyRunChoiceFormation").textContent =
+        challenge.formationName ||
+        challenge.formation ||
+        draft.formationName ||
+        draft.formationCode ||
+        "—";
+
+      xt("dailyRunChoiceDifficulty").textContent =
+        "hard" === (
+          challenge.difficulty ||
+          draft.difficulty
+        )
+          ? "Hard"
+          : "Normal";
+
+      xt("dailyRunChoiceWarning").textContent =
+        official && !completed
+          ? "Starting over will permanently forfeit your one Official Daily attempt. The replacement run will be Practice and cannot replace the lost official score."
+          : completed
+            ? "Starting over creates a new Practice attempt. Your completed Official score remains saved."
+            : "Starting over cancels this Practice attempt and creates another Practice run.";
+
+      xt("continueDailyRunBtn").textContent =
+        completed
+          ? "Continue / View Result"
+          : "Continue";
+
+      xt("startOverDailyRunBtn").textContent =
+        completed
+          ? "Start Practice Attempt"
+          : "Start Over";
+
+      xt("dailyRunChoiceError").textContent = "";
+      xt("dailyRunChoiceError").classList.remove("on");
+      setDailyRunChoiceBusy(!1);
+      r("dailyRunChoiceModal");
+      xt("continueDailyRunBtn").focus()
+    }
+
+    async function resumeDailySeasonFromCurrent(
+      current
+    ) {
+      const attempt = current.attempt,
+        draft = current.draft;
+
+      if (
+        !draft ||
+        !draft.runId
+      ) return !1;
+
+      showSecureSeasonRecoveryModal();
+
+      try {
+        await initializeOnlineBackend();
+
+        const { data, error } =
+          await onlineClient.functions.invoke(
+            "start-season",
+            {
+              body: {
+                runId: draft.runId
+              }
+            }
+          );
+
+        if (error) throw error;
+
+        if (
+          !data ||
+          !data.ok ||
+          !data.draftState ||
+          !data.state
+        ) {
+          throw new Error(
+            data &&
+            data.errorCode ||
+            "DAILY_SEASON_RECOVERY_REJECTED"
+          )
+        }
+
+        recordSecureDailyAttemptStart(
+          attempt
+        );
+
+        saveSecureDailyResumeMarker(
+          attempt.attemptId,
+          draft.runId
+        );
+
+        saveSecureSeasonResumeMarker(
+          draft.runId
+        );
+
+        pendingSecureSeasonResumeState =
+          data.state;
+
+        rebuildSecureDraftFromServerState(
+          data.draftState,
+          attempt
+        );
+
+        return !0
+      } catch (error) {
+        console.warn(
+          "Could not restore the Daily season.",
+          error
+        );
+
+        pendingSecureSeasonResumeState = null;
+        setSecureSeasonRecoveryBusy(!1);
+        xt("seasonRecoveryText").textContent =
+          "Your Daily season is still saved on the server.";
+        showSecureSeasonRecoveryError(
+          "Recovery did not complete. Check your connection and retry."
+        );
+
+        return !1
+      }
+    }
+
+    async function continueDailyRunChoice() {
+      if (
+        dailyRunChoiceBusy ||
+        !dailyRunChoiceCurrent
+      ) return;
+
+      const current =
+          dailyRunChoiceCurrent,
+        source =
+          dailyRunChoiceSource,
+        status =
+          current.attempt &&
+          current.attempt.status;
+
+      setDailyRunChoiceBusy(!0);
+      d("dailyRunChoiceModal");
+
+      try {
+        let restored = !1;
+
+        if (
+          "memory" === source &&
+          gt &&
+          gt.isDaily
+        ) {
+          restored =
+            resumePausedDailyRun();
+
+          if (
+            !restored &&
+            Ct
+          ) {
+            n("scr-season");
+            restored = !0
+          }
+        } else if (
+          "simulating" === status ||
+          "completed" === status
+        ) {
+          restored =
+            await resumeDailySeasonFromCurrent(
+              current
+            )
+        } else {
+          restored =
+            await resumeSecureDailyCurrent(
+              current
+            )
+        }
+
+        if (!restored) {
+          throw new Error(
+            "DAILY_CONTINUE_REJECTED"
+          )
+        }
+
+        dailyRunChoiceCurrent = null;
+        dailyRunChoiceSource = null
+      } catch (error) {
+        console.warn(
+          "Could not continue Daily Challenge.",
+          error
+        );
+
+        xt("dailyRunChoiceError").textContent =
+          "The saved Daily Challenge could not be restored. Check your connection and try again.";
+        xt("dailyRunChoiceError").classList.add("on");
+        r("dailyRunChoiceModal");
+        setDailyRunChoiceBusy(!1)
+      }
+    }
+
+    async function executeDailyStartOver() {
+      if (
+        dailyRunChoiceBusy ||
+        !dailyRunChoiceCurrent
+      ) return;
+
+      const current =
+          dailyRunChoiceCurrent,
+        attempt =
+          current.attempt || {},
+        draft =
+          current.draft || {},
+        completed =
+          "completed" === attempt.status;
+
+      setDailyRunChoiceBusy(!0);
+      d("dailyRunChoiceModal");
+
+      try {
+        await initializeOnlineBackend();
+
+        if (
+          !completed &&
+          draft.runId
+        ) {
+          const { data, error } =
+            await onlineClient.functions.invoke(
+              "cancel-draft",
+              {
+                body: {
+                  runId: draft.runId,
+                  reason: "restart_run"
+                }
+              }
+            );
+
+          if (error) throw error;
+
+          if (
+            !data ||
+            !data.ok
+          ) {
+            throw new Error(
+              data &&
+              data.errorCode ||
+              "DAILY_CANCEL_REJECTED"
+            )
+          }
+        }
+
+        clearSecureDailyResumeMarker();
+        clearSecureSeasonResumeMarker();
+
+        o();
+
+        if (!dailyPreview) {
+          const challengeResult =
+            await onlineClient.functions.invoke(
+              "daily-challenge",
+              {
+                body: {}
+              }
+            );
+
+          if (
+            challengeResult.error ||
+            !challengeResult.data ||
+            !challengeResult.data.ok
+          ) {
+            throw challengeResult.error ||
+              new Error(
+                "DAILY_CHALLENGE_UNAVAILABLE"
+              )
+          }
+
+          dailyPreview =
+            serverDailyPreview(
+              challengeResult.data.challenge
+            )
+        }
+
+        renderDailyChallengePreview(
+          dailyPreview
+        );
+
+        pendingSecureDailyCurrent = null;
+        dailyRunChoiceCurrent = null;
+        dailyRunChoiceSource = null;
+
+        await startSecureDailyChallenge()
+      } catch (error) {
+        console.warn(
+          "Could not start over Daily Challenge.",
+          error
+        );
+
+        xt("dailyRunChoiceError").textContent =
+          "The current Daily attempt could not be closed safely. Nothing was lost; retry after checking your connection.";
+        xt("dailyRunChoiceError").classList.add("on");
+        r("dailyRunChoiceModal");
+        setDailyRunChoiceBusy(!1)
+      }
+    }
+
+    function startOverDailyRunChoice() {
+      if (
+        dailyRunChoiceBusy ||
+        !dailyRunChoiceCurrent
+      ) return;
+
+      const attempt =
+          dailyRunChoiceCurrent.attempt || {},
+        official =
+          "official" === attempt.attemptType,
+        completed =
+          "completed" === attempt.status;
+
+      if (
+        official &&
+        !completed
+      ) {
+        d("dailyRunChoiceModal");
+
+        m(
+          "Lose your Official Daily attempt?",
+          "Starting over now permanently forfeits today's one Official attempt. The new run will be Practice and cannot replace the lost official score.",
+          "Lose Attempt & Start Over",
+          executeDailyStartOver,
+          xt("startOverDailyRunBtn")
+        );
+
+        return
+      }
+
+      executeDailyStartOver()
+    }
+
     async function openDailyChallengeScreen() {
-      if (resumePausedDailyRun()) {
+      const inMemoryCurrent =
+        memoryDailyCurrent();
+
+      if (inMemoryCurrent) {
+        if (
+          gt &&
+          gt.challenge
+        ) {
+          dailyPreview = {
+            ...gt.challenge,
+            serverManaged: !0,
+            attemptType:
+              gt.dailyAttemptType ||
+              "practice"
+          };
+
+          renderDailyChallengePreview(
+            dailyPreview
+          )
+        } else {
+          n("scr-daily")
+        }
+
+        showDailyRunChoiceModal(
+          inMemoryCurrent,
+          "memory"
+        );
+
         return
       }
 
@@ -3380,7 +3875,8 @@ async function __inflate(t) {
             "started",
             "drafting",
             "squad_complete",
-            "simulating"
+            "simulating",
+            "completed"
           ].includes(
             data.current.attempt.status
           )
@@ -3396,10 +3892,20 @@ async function __inflate(t) {
             pendingSecureDailyCurrent.attempt;
 
           xt("dailyAttempt").innerHTML =
-            `<b>Resume ${"official" === attempt.attemptType ? "Official" : "Practice"} Attempt<\/b><span>Your secure Daily Challenge is still active. Continue from where you left off.<\/span>`;
+            "completed" === attempt.status
+              ? `<b>${"official" === attempt.attemptType ? "Official" : "Practice"} Attempt Completed<\/b><span>Review the completed result or start another Practice attempt.<\/span>`
+              : `<b>${"official" === attempt.attemptType ? "Official" : "Practice"} Attempt Saved<\/b><span>Continue it or start over.<\/span>`;
 
           xt("dailyStartBtn").textContent =
-            "Resume Daily Challenge"
+            "Choose Continue or Start Over";
+
+          setTimeout(() => {
+            pendingSecureDailyCurrent &&
+              showDailyRunChoiceModal(
+                pendingSecureDailyCurrent,
+                "server"
+              )
+          }, 50)
         } else {
           xt("dailyStartBtn").textContent =
             "Start Daily Challenge"
@@ -3551,16 +4057,14 @@ async function __inflate(t) {
 
       if (dailyButton) {
         dailyButton.textContent =
-          dailyActive
-            ? "Resume Daily Challenge"
-            : "Daily Challenge"
+          "Daily Challenge"
       }
     }
 
     let It = 0;
 
     function o() {
-      It++, F(), gt = null, Ct = null, Qt = null, Kt = [], pausedDailyScreenId = null, pendingSecureDailyCurrent = null, d("sumModal"), d("swapModal"), d("navModal"), d("resumeDraftModal"), d("seasonRecoveryModal"), xt("rosterPanel").style.display = "none", xt("openSummaryBtn").style.display = "none", syncDailyRunUi(), X(!1)
+      It++, F(), gt = null, Ct = null, Qt = null, Kt = [], pausedDailyScreenId = null, pendingSecureDailyCurrent = null, dailyRunChoiceCurrent = null, dailyRunChoiceSource = null, dailyRunChoiceBusy = !1, d("sumModal"), d("swapModal"), d("navModal"), d("resumeDraftModal"), d("seasonRecoveryModal"), d("dailyRunChoiceModal"), xt("rosterPanel").style.display = "none", xt("openSummaryBtn").style.display = "none", syncDailyRunUi(), X(!1)
     }
 
     function i() {
@@ -7001,41 +7505,22 @@ async function __inflate(t) {
     xt("howtoBtn").addEventListener("click", () => n("scr-howto"));
     xt("howtoBackBtn").addEventListener("click", () => n("scr-menu"));
     xt("dailyBackBtn").addEventListener("click", () => n("scr-menu"));
+    xt("continueDailyRunBtn").addEventListener("click", continueDailyRunChoice);
+    xt("startOverDailyRunBtn").addEventListener("click", startOverDailyRunChoice);
+    xt("cancelDailyRunChoiceBtn").addEventListener("click", closeDailyRunChoiceModal);
     xt("dailyStartBtn").addEventListener("click", async () => {
       if (SERVER_DAILY_TEST_ENABLED) {
-        if (pendingSecureDailyCurrent) {
-          const button =
-            xt("dailyStartBtn");
+        const current =
+          memoryDailyCurrent() ||
+          pendingSecureDailyCurrent;
 
-          button.disabled = !0;
-          button.textContent =
-            "Restoring Daily Challenge…";
-
-          try {
-            const restored =
-              await resumeSecureDailyCurrent(
-                pendingSecureDailyCurrent
-              );
-
-            if (!restored) {
-              throw new Error(
-                "DAILY_RESUME_REJECTED"
-              )
-            }
-          } catch (error) {
-            console.warn(
-              "Could not restore the saved Daily Challenge.",
-              error
-            );
-
-            button.disabled = !1;
-            button.textContent =
-              "Resume Daily Challenge";
-
-            l(
-              "Could not restore the saved Daily Challenge."
-            )
-          }
+        if (current) {
+          showDailyRunChoiceModal(
+            current,
+            memoryDailyCurrent()
+              ? "memory"
+              : "server"
+          );
 
           return
         }
