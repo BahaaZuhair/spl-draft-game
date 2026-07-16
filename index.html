@@ -560,11 +560,31 @@ body.daily-run-active #restartCtlBtn{
         <div class="daily-history" id="dailyHistory"></div>
       </div>
 
+      <div class="panel" id="dailyLeaderboardPanel">
+        <div class="records-section-head">
+          <div>
+            <div class="h2">Daily Challenge Leaderboard</div>
+            <p>Today’s luck-based Daily Challenge. Each player’s best score from their first three leaderboard attempts is shown once.</p>
+          </div>
+          <div class="online-tools">
+            <span class="badge online-state" id="dailyLeaderboardStatusBadge">Today</span>
+            <button class="btn ghost sm" id="refreshDailyLeaderboardBtn" type="button">Refresh</button>
+          </div>
+        </div>
+        <div class="tablewrap local-table" style="margin-top:12px">
+          <div id="myDailyRank" class="resume-draft-note" style="margin:0 0 10px"></div>
+          <table class="lg">
+            <thead><tr><th>#</th><th>Team</th><th>Score</th><th>Attempt</th><th>Difficulty</th><th>OVR</th><th>Finish</th><th>Pts</th><th>GD</th></tr></thead>
+            <tbody id="dailyLeaderboardBody"><tr><td colspan="9" class="empty">Connecting to today’s Daily leaderboard…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="panel" id="globalLeaderboardPanel">
         <div class="records-section-head">
           <div>
-            <div class="h2">Global Leaderboards</div>
-            <p>Ratings by Season runs only. Max Rating All-Time remains local-only and never enters the global rankings. Your private user ID is never displayed.</p>
+            <div class="h2">Standard Season Leaderboard</div>
+            <p>Normal Ratings by Season runs only. Daily Challenge scores use the separate Daily leaderboard above. Max Rating All-Time remains local-only.</p>
           </div>
           <div class="online-tools">
             <span class="badge online-state" id="onlineStatusBadge">Connecting</span>
@@ -2481,6 +2501,111 @@ async function __inflate(t) {
       }
     }
 
+    async function renderDailyLeaderboard() {
+      const panel =
+          document.getElementById(
+            "dailyLeaderboardPanel"
+          ),
+        body =
+          document.getElementById(
+            "dailyLeaderboardBody"
+          ),
+        rankNode =
+          document.getElementById(
+            "myDailyRank"
+          );
+
+      if (
+        !panel ||
+        !body ||
+        !rankNode
+      ) return;
+
+      if (!SERVER_DAILY_TEST_ENABLED) {
+        panel.style.display = "none";
+        return
+      }
+
+      panel.style.display = "";
+      body.innerHTML =
+        '<tr><td colspan="9" class="empty">Loading today’s Daily scores…<\/td><\/tr>';
+      rankNode.textContent =
+        "Loading your Daily rank…";
+
+      try {
+        await initializeOnlineBackend();
+
+        const boardResult =
+          await onlineClient.rpc(
+            "get_daily_leaderboard_v1",
+            {
+              p_challenge_date: null,
+              p_limit: 100
+            }
+          );
+
+        if (boardResult.error) {
+          throw boardResult.error
+        }
+
+        const rows =
+          Array.isArray(boardResult.data)
+            ? boardResult.data
+            : [];
+
+        body.innerHTML =
+          rows.length
+            ? rows.map(row => `<tr>
+                <td>${Math.round(+row.rank || 0)}<\/td>
+                <td>${escapeHtml(row.display_name || "Anonymous")}<\/td>
+                <td class="scorecell">${Math.round(+row.score || 0).toLocaleString()}<\/td>
+                <td>${Math.round(+row.leaderboard_attempt_number || 0)} / 3<\/td>
+                <td>${"hard" === row.difficulty ? "Hard" : "Normal"}<\/td>
+                <td>${(+row.squad_overall || 0).toFixed(1)}<\/td>
+                <td>${ordinal(row.final_position)}<\/td>
+                <td>${Math.round(+row.points || 0)}<\/td>
+                <td>${+row.goal_difference > 0 ? "+" : ""}${Math.round(+row.goal_difference || 0)}<\/td>
+              <\/tr>`).join("")
+            : '<tr><td colspan="9" class="empty">No Daily scores have been completed today.<\/td><\/tr>';
+
+        const rankResult =
+          await onlineClient.rpc(
+            "get_my_daily_leaderboard_rank",
+            {
+              p_challenge_date: null
+            }
+          );
+
+        if (rankResult.error) {
+          throw rankResult.error
+        }
+
+        const rank =
+          rankResult.data || {};
+
+        rankNode.textContent =
+          rank.hasScore
+            ? `Your Daily rank: ${rank.rankLabel} · Best score: ${Math.round(+(
+                rank.bestScore &&
+                rank.bestScore.score
+              ) || 0).toLocaleString()} · Best attempt: ${Math.round(+(
+                rank.bestScore &&
+                rank.bestScore.leaderboardAttemptNumber
+              ) || 0)} / 3`
+            : "Your Daily rank: Unranked · Complete one of your first three attempts to enter."
+      } catch (error) {
+        console.warn(
+          "Could not load Daily leaderboard.",
+          error
+        );
+
+        body.innerHTML =
+          '<tr><td colspan="9" class="empty">Daily leaderboard unavailable.<\/td><\/tr>';
+        rankNode.textContent =
+          "Your Daily rank is temporarily unavailable."
+      }
+    }
+
     async function renderGlobalLeaderboard() {
       const tabs = document.getElementById("globalLeaderboardTabs"),
         body = document.getElementById("globalLeaderboardBody");
@@ -3138,6 +3263,7 @@ async function __inflate(t) {
       renderRecentRuns();
       renderCareerStatistics();
       renderDailyHistory();
+      renderDailyLeaderboard();
       renderGlobalLeaderboard()
     }
 
@@ -3301,12 +3427,16 @@ async function __inflate(t) {
         `<div><span>Challenge ID<\/span><b>${escapeHtml(preview.challengeId)}<\/b><\/div>
         <div><span>Formation<\/span><b>${escapeHtml(preview.formation)}<\/b><\/div>
         <div><span>Difficulty<\/span><b>${"hard" === preview.difficulty ? "Hard Mode — No Skips" : "Normal Mode — 2 Skips"}<\/b><\/div>
-        <div><span>Draft mode<\/span><b>${"alltime" === preview.mode ? "Max Rating All-Time" : "Ratings by Season"}<\/b><\/div>`;
+        <div><span>Draft mode<\/span><b>${"alltime" === preview.mode ? "Max Rating All-Time" : "Ratings by Season"}<\/b><\/div>
+        <div><span>Leaderboard attempts left<\/span><b>${Math.max(0, +(preview.leaderboardAttemptsLeft ?? 3))} / ${+(preview.attemptsAllowed || 3)}<\/b><\/div>`;
+
+      const attemptNumber =
+        preview.nextLeaderboardAttemptNumber;
 
       xt("dailyAttempt").innerHTML =
         "official" === attempt
-          ? "<b>Official Attempt<\/b><span>Your first attempt today will be recorded as your official Daily Challenge score. Later attempts are practice.<\/span>"
-          : "<b>Practice Attempt<\/b><span>Your official attempt for today has already started. This run will not replace its result.<\/span>";
+          ? `<b>Leaderboard Attempt ${attemptNumber || Math.min(3, +(preview.leaderboardAttemptsStarted || 0) + 1)} / ${+(preview.attemptsAllowed || 3)}<\/b><span>This attempt can enter today’s separate Daily leaderboard. Starting it consumes one of your three allowed leaderboard attempts.<\/span>`
+          : "<b>Practice Attempt<\/b><span>Your three leaderboard attempts have been used. You may continue playing, but later runs will not enter any online leaderboard.<\/span>";
 
       n("scr-daily")
     }
@@ -3324,8 +3454,22 @@ async function __inflate(t) {
         mode: challenge.draftMode,
         attemptType:
           challenge.nextAttemptType || "official",
+        attemptsAllowed:
+          +challenge.attemptsAllowed || 3,
+        leaderboardAttemptsStarted:
+          +challenge.leaderboardAttemptsStarted || 0,
+        leaderboardAttemptsLeft:
+          Number.isFinite(
+            +challenge.leaderboardAttemptsLeft
+          )
+            ? +challenge.leaderboardAttemptsLeft
+            : 3,
+        nextLeaderboardAttemptNumber:
+          challenge.nextLeaderboardAttemptNumber == null
+            ? null
+            : +challenge.nextLeaderboardAttemptNumber,
         officialAttemptAvailable:
-          challenge.officialAttemptAvailable,
+          challenge.leaderboardAttemptsLeft > 0,
         attemptId:
           challenge.officialAttempt &&
           challenge.officialAttempt.attemptId ||
@@ -3436,9 +3580,17 @@ async function __inflate(t) {
           ? "Continue to review this attempt, or start a new Practice attempt."
           : "Continue from where you stopped, or start over with a fresh run.";
 
+      const leaderboardNumber =
+        attempt.leaderboardAttemptNumber != null
+          ? +attempt.leaderboardAttemptNumber
+          : gt &&
+            gt.dailyLeaderboardAttemptNumber != null
+            ? +gt.dailyLeaderboardAttemptNumber
+            : null;
+
       xt("dailyRunChoiceType").textContent =
         official
-          ? "Official"
+          ? `Leaderboard ${leaderboardNumber || "—"} / 3`
           : "Practice";
 
       xt("dailyRunChoiceStatus").textContent =
@@ -3461,11 +3613,26 @@ async function __inflate(t) {
           ? "Hard"
           : "Normal";
 
+      const attemptsLeft =
+          Number.isFinite(
+            +(dailyPreview &&
+              dailyPreview.leaderboardAttemptsLeft)
+          )
+            ? +dailyPreview.leaderboardAttemptsLeft
+            : Math.max(
+                0,
+                3 - (leaderboardNumber || 3)
+              ),
+        nextEligible =
+          attemptsLeft > 0;
+
       xt("dailyRunChoiceWarning").textContent =
         official && !completed
-          ? "Starting over will permanently forfeit your one Official Daily attempt. The replacement run will be Practice and cannot replace the lost official score."
+          ? `Starting over permanently forfeits leaderboard attempt ${leaderboardNumber || "this attempt"}. ${nextEligible ? `You will have ${attemptsLeft} leaderboard attempt${1 === attemptsLeft ? "" : "s"} left.` : "Your next run will be Practice."}`
           : completed
-            ? "Starting over creates a new Practice attempt. Your completed Official score remains saved."
+            ? nextEligible
+              ? `Starting over begins leaderboard attempt ${(leaderboardNumber || 0) + 1} / 3. Your completed score remains saved, and only your best Daily score appears on the Daily leaderboard.`
+              : "All three leaderboard attempts are used. Starting over creates a Practice run and does not affect your saved Daily scores."
             : "Starting over cancels this Practice attempt and creates another Practice run.";
 
       xt("continueDailyRunBtn").textContent =
@@ -3475,7 +3642,9 @@ async function __inflate(t) {
 
       xt("startOverDailyRunBtn").textContent =
         completed
-          ? "Start Practice Attempt"
+          ? attemptsLeft > 0
+            ? `Start Leaderboard Attempt ${(leaderboardNumber || 0) + 1} / 3`
+            : "Start Practice Attempt"
           : "Start Over";
 
       xt("dailyRunChoiceError").textContent = "";
@@ -3762,9 +3931,9 @@ async function __inflate(t) {
         d("dailyRunChoiceModal");
 
         m(
-          "Lose your Official Daily attempt?",
-          "Starting over now permanently forfeits today's one Official attempt. The new run will be Practice and cannot replace the lost official score.",
-          "Lose Attempt & Start Over",
+          "Forfeit this leaderboard attempt?",
+          "Starting over permanently consumes this Daily leaderboard attempt. You cannot recover it. Your next run is leaderboard-eligible only while you still have attempts remaining.",
+          "Forfeit Attempt & Start Over",
           executeDailyStartOver,
           xt("startOverDailyRunBtn")
         );
@@ -3893,8 +4062,8 @@ async function __inflate(t) {
 
           xt("dailyAttempt").innerHTML =
             "completed" === attempt.status
-              ? `<b>${"official" === attempt.attemptType ? "Official" : "Practice"} Attempt Completed<\/b><span>Review the completed result or start another Practice attempt.<\/span>`
-              : `<b>${"official" === attempt.attemptType ? "Official" : "Practice"} Attempt Saved<\/b><span>Continue it or start over.<\/span>`;
+              ? `<b>${"official" === attempt.attemptType ? `Leaderboard Attempt ${attempt.leaderboardAttemptNumber || "—"} / 3` : "Practice Attempt"} Completed<\/b><span>Review the result or choose another run. Only the first three attempts can enter the Daily leaderboard.<\/span>`
+              : `<b>${"official" === attempt.attemptType ? `Leaderboard Attempt ${attempt.leaderboardAttemptNumber || "—"} / 3` : "Practice Attempt"} Saved<\/b><span>Continue it or start over.<\/span>`;
 
           xt("dailyStartBtn").textContent =
             "Choose Continue or Start Over";
@@ -5055,6 +5224,12 @@ async function __inflate(t) {
             ? dailyAttempt &&
               dailyAttempt.attemptId ||
               null
+            : null,
+        dailyLeaderboardAttemptNumber:
+          isDaily &&
+          dailyAttempt &&
+          dailyAttempt.leaderboardAttemptNumber != null
+            ? +dailyAttempt.leaderboardAttemptNumber
             : null,
         dailyPlan: null,
         dailyPickIndex: 0,
@@ -7552,6 +7727,7 @@ async function __inflate(t) {
     xt("resumeSavedDraftBtn").addEventListener("click", resumeChosenSecureDraft);
     xt("startNewDraftBtn").addEventListener("click", cancelSavedDraftAndStartNew);
     xt("refreshGlobalLeaderboardBtn").addEventListener("click", renderGlobalLeaderboard);
+    xt("refreshDailyLeaderboardBtn").addEventListener("click", renderDailyLeaderboard);
     console.info(
       `SPL Draft ${PHASE4_PRODUCTION_BUILD}: secure drafting, season simulation, player statistics, awards and trusted scoring are active.`
     );
