@@ -409,6 +409,13 @@ table.lg tr:nth-child(-n+3) td.pos{color:var(--gold);font-weight:700}
 .global-home-btn svg{width:23px;height:23px;display:block;fill:currentColor}
 #homeBtn{display:none!important}
 #draftRestartBtn{margin-left:auto}
+body.daily-run-active #draftRestartBtn,
+body.daily-run-active #restartBtn,
+body.daily-run-active #restartRunBtn,
+body.daily-run-active #scoreRestartBtn,
+body.daily-run-active #restartCtlBtn{
+  display:none!important
+}
 @media(max-width:760px){
   .global-home-btn{top:12px;left:12px;width:42px;height:42px}
   .global-home-btn svg{width:21px;height:21px}
@@ -3485,10 +3492,18 @@ async function __inflate(t) {
     function d(t) {
       xt(t).classList.remove("on")
     }
+
+    function syncDailyRunUi() {
+      document.body.classList.toggle(
+        "daily-run-active",
+        !!(gt && gt.isDaily)
+      )
+    }
+
     let It = 0;
 
     function o() {
-      It++, F(), gt = null, Ct = null, Qt = null, Kt = [], d("sumModal"), d("swapModal"), d("navModal"), d("resumeDraftModal"), d("seasonRecoveryModal"), xt("rosterPanel").style.display = "none", xt("openSummaryBtn").style.display = "none", X(!1)
+      It++, F(), gt = null, Ct = null, Qt = null, Kt = [], d("sumModal"), d("swapModal"), d("navModal"), d("resumeDraftModal"), d("seasonRecoveryModal"), xt("rosterPanel").style.display = "none", xt("openSummaryBtn").style.display = "none", syncDailyRunUi(), X(!1)
     }
 
     function i() {
@@ -3500,6 +3515,11 @@ async function __inflate(t) {
     }
 
     function c() {
+      if (gt && gt.isDaily) {
+        b();
+        return
+      }
+
       o(), i(), n("scr-setup")
     }
 
@@ -4342,6 +4362,8 @@ async function __inflate(t) {
         }
       };
 
+      syncDailyRunUi();
+
       for (const slot of gt.slots) {
         if (slot.player) {
           gt.draftedCards.add(slot.player.card_id);
@@ -4884,8 +4906,42 @@ async function __inflate(t) {
 
     function X(t) {
       const button = xt("skipBtn"),
-        dailyHasAlternative = !gt || !gt.isDaily || ((gt.dailyPlan[gt.dailyPickIndex] || []).length > gt.dailyChoiceIndex + 1);
-      t && gt && gt.skipsLeft > 0 && !gt.complete && dailyHasAlternative ? (button.style.display = "inline-block", button.textContent = `Use Skip (${gt.skipsLeft} left)`) : button.style.display = "none"
+        secureDaily =
+          !!(
+            gt &&
+            gt.isDaily &&
+            gt.serverMode &&
+            SERVER_DAILY_TEST_ENABLED
+          ),
+        dailyHasAlternative =
+          !gt ||
+          !gt.isDaily ||
+          secureDaily ||
+          (
+            Array.isArray(gt.dailyPlan) &&
+            (
+              (
+                gt.dailyPlan[
+                  gt.dailyPickIndex
+                ] ||
+                []
+              ).length >
+              gt.dailyChoiceIndex + 1
+            )
+          );
+
+      t &&
+      gt &&
+      gt.skipsLeft > 0 &&
+      !gt.complete &&
+      dailyHasAlternative
+        ? (
+            button.style.display =
+              "inline-block",
+            button.textContent =
+              `Use Skip (${gt.skipsLeft} left)`
+          )
+        : button.style.display = "none"
     }
 
     function k(t) {
@@ -6598,6 +6654,7 @@ async function __inflate(t) {
         random: isDaily ? mulberry32(fnv1aHash(`${challenge.seed}:roulette`)) : null
       };
       if (isDaily) gt.dailyPlan = buildDailyDraftPlan(challenge, gt.slots);
+      syncDailyRunUi();
       registerRunStarted();
       Kt = [];
       xt("formName").textContent = `${formation.name}${isDaily ? " · DAILY CHALLENGE" : ""}`;
