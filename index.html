@@ -1448,10 +1448,9 @@ async function __inflate(t) {
       SERVER_SEASON_ENABLED = !0,
       SERVER_PLAYER_STATS_ENABLED = !0,
       SERVER_AWARDS_ENABLED = !0,
-      SERVER_DAILY_TEST_ENABLED =
-        new URLSearchParams(window.location.search).get("serverDaily") === "1",
+      SERVER_DAILY_ENABLED = !0,
       PHASE4_PRODUCTION_BUILD = "phase4-final-2026-07-15",
-      PHASE5_DAILY_TEST_BUILD = "phase5-daily-gated-2026-07-16",
+      PHASE5_PRODUCTION_BUILD = "phase5-daily-production-2026-07-16",
       SERVER_DRAFT_RESUME_KEY = "spl_draft_secure_run_v1",
       SERVER_DAILY_RESUME_KEY = "spl_draft_secure_daily_v1",
       SERVER_SEASON_RESUME_KEY = "spl_draft_secure_season_v1",
@@ -1720,7 +1719,7 @@ async function __inflate(t) {
       if (!serverRunId) return;
 
       if (
-        SERVER_DAILY_TEST_ENABLED &&
+        SERVER_DAILY_ENABLED &&
         gt &&
         gt.isDaily &&
         gt.dailyAttemptId
@@ -2521,7 +2520,7 @@ async function __inflate(t) {
         !rankNode
       ) return;
 
-      if (!SERVER_DAILY_TEST_ENABLED) {
+      if (!SERVER_DAILY_ENABLED) {
         panel.style.display = "none";
         return
       }
@@ -2615,13 +2614,13 @@ async function __inflate(t) {
       try {
         await initializeOnlineBackend();
         const { data, error } = await onlineClient.rpc(
-          SERVER_DAILY_TEST_ENABLED
+          SERVER_DAILY_ENABLED
             ? "get_global_leaderboard_v2"
             : "get_global_leaderboard",
           {
             p_period: globalLeaderboardPeriod,
             p_limit:
-              SERVER_DAILY_TEST_ENABLED
+              SERVER_DAILY_ENABLED
                 ? 100
                 : 10
           }
@@ -2647,7 +2646,7 @@ async function __inflate(t) {
           );
 
         if (
-          SERVER_DAILY_TEST_ENABLED &&
+          SERVER_DAILY_ENABLED &&
           myRankNode
         ) {
           const rankResult =
@@ -3986,7 +3985,7 @@ async function __inflate(t) {
 
       persistTeamName(name);
 
-      if (!SERVER_DAILY_TEST_ENABLED) {
+      if (!SERVER_DAILY_ENABLED) {
         dailyPreview = buildDailyChallenge();
         renderDailyChallengePreview(dailyPreview);
         return
@@ -5138,7 +5137,7 @@ async function __inflate(t) {
           ? state.slots
           : [],
         isDaily =
-          SERVER_DAILY_TEST_ENABLED &&
+          SERVER_DAILY_ENABLED &&
           state.isDailyChallenge === true,
         dailyChallenge =
           isDaily
@@ -5425,7 +5424,7 @@ async function __inflate(t) {
 
     async function startSecureDailyChallenge() {
       if (
-        !SERVER_DAILY_TEST_ENABLED ||
+        !SERVER_DAILY_ENABLED ||
         !dailyPreview
       ) return;
 
@@ -5510,7 +5509,7 @@ async function __inflate(t) {
     }
 
     async function tryResumeSecureDailyChallenge() {
-      if (!SERVER_DAILY_TEST_ENABLED) return !1;
+      if (!SERVER_DAILY_ENABLED) return !1;
 
       const marker =
         readSecureDailyResumeMarker();
@@ -5779,7 +5778,7 @@ async function __inflate(t) {
         gt.serverMode &&
         (
           !gt.isDaily ||
-          SERVER_DAILY_TEST_ENABLED
+          SERVER_DAILY_ENABLED
         )
       ) {
         return void runServerDraftRoll(t)
@@ -5851,7 +5850,7 @@ async function __inflate(t) {
             gt &&
             gt.isDaily &&
             gt.serverMode &&
-            SERVER_DAILY_TEST_ENABLED
+            SERVER_DAILY_ENABLED
           ),
         dailyHasAlternative =
           !gt ||
@@ -5971,7 +5970,7 @@ async function __inflate(t) {
         gt.serverMode &&
         (
           !gt.isDaily ||
-          SERVER_DAILY_TEST_ENABLED
+          SERVER_DAILY_ENABLED
         )
       ) {
         return void runServerDraftSelection(t, s)
@@ -6396,7 +6395,7 @@ async function __inflate(t) {
         gt.serverShadow.serverRunId &&
         (
           !gt.isDaily ||
-          SERVER_DAILY_TEST_ENABLED
+          SERVER_DAILY_ENABLED
         )
       )
     }
@@ -6994,7 +6993,7 @@ async function __inflate(t) {
       if (
         gt &&
         gt.isDaily &&
-        !SERVER_DAILY_TEST_ENABLED
+        !SERVER_DAILY_ENABLED
       ) {
         return B()
       }
@@ -7684,7 +7683,7 @@ async function __inflate(t) {
     xt("startOverDailyRunBtn").addEventListener("click", startOverDailyRunChoice);
     xt("cancelDailyRunChoiceBtn").addEventListener("click", closeDailyRunChoiceModal);
     xt("dailyStartBtn").addEventListener("click", async () => {
-      if (SERVER_DAILY_TEST_ENABLED) {
+      if (SERVER_DAILY_ENABLED) {
         const current =
           memoryDailyCurrent() ||
           pendingSecureDailyCurrent;
@@ -7732,11 +7731,9 @@ async function __inflate(t) {
       `SPL Draft ${PHASE4_PRODUCTION_BUILD}: secure drafting, season simulation, player statistics, awards and trusted scoring are active.`
     );
 
-    if (SERVER_DAILY_TEST_ENABLED) {
-      console.info(
-        `SPL Draft ${PHASE5_DAILY_TEST_BUILD}: trusted Daily Challenge test is ENABLED.`
-      )
-    }
+    console.info(
+      `SPL Draft ${PHASE5_PRODUCTION_BUILD}: secure luck-based Daily Challenge, three eligible attempts and separate Daily leaderboard are active.`
+    );
     initializeOnlineBackend().then(async () => {
       renderGlobalLeaderboard();
 
@@ -7747,7 +7744,7 @@ async function __inflate(t) {
         if (seasonMarker) {
           await tryResumeSecureSeason()
         } else if (
-          SERVER_DAILY_TEST_ENABLED &&
+          SERVER_DAILY_ENABLED &&
           readSecureDailyResumeMarker()
         ) {
           const resumedDaily =
