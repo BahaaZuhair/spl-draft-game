@@ -7,6 +7,7 @@
 <title>SPL Draft — Saudi Pro League</title>
 
 
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700&family=Noto+Kufi+Arabic:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -431,8 +432,11 @@ body.daily-run-active #restartCtlBtn{
 
 
 
+
+
 </head>
 <body>
+
 
 
 
@@ -943,12 +947,12 @@ body.daily-run-active #restartCtlBtn{
 <div class="toast" id="toast">Copied</div>
 <div class="achievement-toast" id="achievementToast" role="status" aria-live="polite"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.5" integrity="sha384-Fntl9b+IRzm2GKZK0c129fQFknWsn8pyxDejLO4wwds1LF9DSob2K2QXlfw8EIXn" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>(async () => {
   try {
     const PHASE6_NO_DATABASE_BUILD = !0,
       PHASE6_BUILD =
-        "phase7b-xss-hardened-production-2026-07-17",
+        "phase7d-pinned-supabase-sri-production-2026-07-18",
       nt = ["00/01", "01/02", "02/03", "03/04", "04/05", "05/06", "06/07", "07/08", "08/09", "09/10", "10/11", "11/12", "12/13", "13/14", "14/15", "15/16", "16/17", "17/18", "18/19", "19/20", "20/21", "21/22", "22/23", "23/24", "24/25", "25/26"], lt = t => "number" == typeof t && isFinite(t) ? t : "" === t || null == t ? 0 : parseFloat(t) || 0, rt = {
       "Al-Hilal": {
         code: "HIL",
