@@ -456,7 +456,7 @@ body.daily-run-active #restartCtlBtn{
   <header class="top">
     <div>
       <div class="brand">SPL <span class="gold">Draft</span></div>
-      <div class="brand-sub">Saudi Pro League · seasons 00/01 – 25/26 · 11,282 player cards</div>
+      <div class="brand-sub">Saudi Pro League · seasons 00/01 – 25/26 · secure backend card pool</div>
     </div>
     <div class="badge">V6.5.1 online</div>
   </header>
@@ -800,6 +800,37 @@ body.daily-run-active #restartCtlBtn{
         <div class="awards" id="awards"></div>
       </div>
       <div class="panel article" id="article"></div>
+
+      <div class="panel" id="reviewLeaderboardPanel" style="display:none">
+        <div class="records-section-head">
+          <div>
+            <div class="h2" id="reviewLeaderboardTitle">Leaderboard</div>
+            <p id="reviewLeaderboardDescription"></p>
+          </div>
+          <div class="online-tools">
+            <span class="badge online-state" id="reviewLeaderboardStatusBadge">Online</span>
+            <button class="btn ghost sm" id="refreshReviewLeaderboardBtn" type="button">Refresh</button>
+          </div>
+        </div>
+
+        <div class="record-tabs" id="reviewLeaderboardTabs" role="tablist" aria-label="Season review leaderboard period">
+          <button class="sel" data-period="today">Today</button>
+          <button data-period="week">This Week</button>
+          <button data-period="month">This Month</button>
+          <button data-period="all">All Time</button>
+        </div>
+
+        <div class="tablewrap local-table" style="margin-top:12px">
+          <div id="reviewLeaderboardRank" class="resume-draft-note" style="margin:0 0 10px"></div>
+          <table class="lg">
+            <thead id="reviewLeaderboardHead"></thead>
+            <tbody id="reviewLeaderboardBody">
+              <tr><td colspan="10" class="empty">Loading leaderboard…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div style="display:flex;justify-content:center"><button class="btn" id="restartRunBtn">Restart Run</button></div>
     </div>
   </section>
@@ -926,7 +957,7 @@ body.daily-run-active #restartCtlBtn{
   try {
     const PHASE6_NO_DATABASE_BUILD = !0,
       PHASE6_BUILD =
-        "phase6bc-no-public-database-test-2026-07-17",
+        "phase6d-review-leaderboards-test-2026-07-17",
       nt = ["00/01", "01/02", "02/03", "03/04", "04/05", "05/06", "06/07", "07/08", "08/09", "09/10", "10/11", "11/12", "12/13", "13/14", "14/15", "15/16", "16/17", "17/18", "18/19", "19/20", "20/21", "21/22", "22/23", "23/24", "24/25", "25/26"], lt = t => "number" == typeof t && isFinite(t) ? t : "" === t || null == t ? 0 : parseFloat(t) || 0, rt = {
       "Al-Hilal": {
         code: "HIL",
@@ -1610,7 +1641,9 @@ function getDerivedAIStrength(clubId) {
       onlineClient = null,
       onlineUser = null,
       onlineReadyPromise = null,
-      globalLeaderboardPeriod = "today";
+      globalLeaderboardPeriod = "today",
+      reviewLeaderboardPeriod = "today",
+      reviewLeaderboardRun = null;
 
     function setOnlineStatus(state, text) {
       const badge = document.getElementById("onlineStatusBadge");
@@ -2687,6 +2720,241 @@ function getDerivedAIStrength(clubId) {
       } catch (error) {
         console.warn("Could not load global leaderboard.", error);
         body.innerHTML = '<tr><td colspan="10" class="empty">Global leaderboard unavailable. Local records still work normally.<\/td><\/tr>'
+      }
+    }
+
+
+    async function renderSeasonReviewLeaderboard(run = reviewLeaderboardRun) {
+      const panel = document.getElementById("reviewLeaderboardPanel"),
+        title = document.getElementById("reviewLeaderboardTitle"),
+        description = document.getElementById("reviewLeaderboardDescription"),
+        badge = document.getElementById("reviewLeaderboardStatusBadge"),
+        tabs = document.getElementById("reviewLeaderboardTabs"),
+        head = document.getElementById("reviewLeaderboardHead"),
+        body = document.getElementById("reviewLeaderboardBody"),
+        rankNode = document.getElementById("reviewLeaderboardRank");
+
+      if (
+        !panel ||
+        !title ||
+        !description ||
+        !badge ||
+        !tabs ||
+        !head ||
+        !body ||
+        !rankNode
+      ) return;
+
+      if (!run || "alltime" === run.draftMode) {
+        reviewLeaderboardRun = null;
+        panel.style.display = "none";
+        return
+      }
+
+      if (
+        !reviewLeaderboardRun ||
+        reviewLeaderboardRun.runId !== run.runId
+      ) {
+        reviewLeaderboardPeriod = "today"
+      }
+
+      reviewLeaderboardRun = run;
+      panel.style.display = "";
+
+      const isDaily = !!run.isDailyChallenge;
+
+      if (isDaily) {
+        title.textContent = "Daily Challenge Leaderboard";
+        description.textContent =
+          "Today’s Daily leaderboard. Each player appears once with their best score from the first three eligible attempts.";
+        badge.textContent =
+          "official" === run.dailyAttemptType
+            ? "Eligible attempt"
+            : "Practice run";
+        tabs.style.display = "none";
+        rankNode.textContent =
+          "official" === run.dailyAttemptType
+            ? "Loading your Daily rank…"
+            : "This Practice run does not enter the leaderboard. Today’s eligible scores are shown below.";
+        head.innerHTML =
+          "<tr><th>#</th><th>Team</th><th>Score</th><th>Attempt</th><th>Difficulty</th><th>OVR</th><th>Finish</th><th>Pts</th><th>GD</th></tr>";
+        body.innerHTML =
+          '<tr><td colspan="9" class="empty">Loading today’s Daily scores…<\/td><\/tr>';
+
+        try {
+          await initializeOnlineBackend();
+
+          const boardResult =
+            await onlineClient.rpc(
+              "get_daily_leaderboard_v1",
+              {
+                p_challenge_date:
+                  run.dailyChallengeDate || null,
+                p_limit: 100
+              }
+            );
+
+          if (boardResult.error) throw boardResult.error;
+
+          const rows =
+            Array.isArray(boardResult.data)
+              ? boardResult.data
+              : [];
+
+          body.innerHTML =
+            rows.length
+              ? rows.map(row => `<tr>
+                  <td>${Math.round(+row.rank || 0)}<\/td>
+                  <td>${escapeHtml(row.display_name || "Anonymous")}<\/td>
+                  <td class="scorecell">${Math.round(+row.score || 0).toLocaleString()}<\/td>
+                  <td>${Math.round(+row.leaderboard_attempt_number || 0)} / 3<\/td>
+                  <td>${"hard" === row.difficulty ? "Hard" : "Normal"}<\/td>
+                  <td>${(+row.squad_overall || 0).toFixed(1)}<\/td>
+                  <td>${ordinal(row.final_position)}<\/td>
+                  <td>${Math.round(+row.points || 0)}<\/td>
+                  <td>${+row.goal_difference > 0 ? "+" : ""}${Math.round(+row.goal_difference || 0)}<\/td>
+                <\/tr>`).join("")
+              : '<tr><td colspan="9" class="empty">No eligible Daily scores have been completed yet.<\/td><\/tr>';
+
+          if ("official" === run.dailyAttemptType) {
+            const rankResult =
+              await onlineClient.rpc(
+                "get_my_daily_leaderboard_rank",
+                {
+                  p_challenge_date:
+                    run.dailyChallengeDate || null
+                }
+              );
+
+            if (rankResult.error) throw rankResult.error;
+
+            const rank = rankResult.data || {};
+
+            rankNode.textContent =
+              rank.hasScore
+                ? `Your Daily rank: ${rank.rankLabel} · Best score: ${Math.round(+(
+                    rank.bestScore &&
+                    rank.bestScore.score
+                  ) || 0).toLocaleString()} · Best attempt: ${Math.round(+(
+                    rank.bestScore &&
+                    rank.bestScore.leaderboardAttemptNumber
+                  ) || 0)} / 3`
+                : "Your Daily rank: Unranked"
+          }
+        } catch (error) {
+          console.warn(
+            "Could not load the Season Review Daily leaderboard.",
+            error
+          );
+          body.innerHTML =
+            '<tr><td colspan="9" class="empty">Daily leaderboard unavailable.<\/td><\/tr>';
+          if ("official" === run.dailyAttemptType) {
+            rankNode.textContent =
+              "Your Daily rank is temporarily unavailable."
+          }
+        }
+
+        return
+      }
+
+      title.textContent = "Standard Season Leaderboard";
+      description.textContent =
+        "Ratings by Season runs only. Daily Challenge uses its own board, and Max Rating All-Time never appears here.";
+      badge.textContent = "Standard";
+      tabs.style.display = "";
+      tabs.querySelectorAll("button").forEach(button => {
+        button.classList.toggle(
+          "sel",
+          button.dataset.period === reviewLeaderboardPeriod
+        )
+      });
+      head.innerHTML =
+        "<tr><th>#</th><th>Team</th><th>Score</th><th>Date</th><th>Difficulty</th><th>Draft</th><th>OVR</th><th>Finish</th><th>Pts</th><th>GD</th></tr>";
+      body.innerHTML =
+        '<tr><td colspan="10" class="empty">Loading Standard Season scores…<\/td><\/tr>';
+      rankNode.textContent =
+        "Loading your Standard Season rank…";
+
+      try {
+        await initializeOnlineBackend();
+
+        const boardResult =
+          await onlineClient.rpc(
+            SERVER_DAILY_ENABLED
+              ? "get_global_leaderboard_v2"
+              : "get_global_leaderboard",
+            {
+              p_period: reviewLeaderboardPeriod,
+              p_limit:
+                SERVER_DAILY_ENABLED
+                  ? 100
+                  : 10
+            }
+          );
+
+        if (boardResult.error) throw boardResult.error;
+
+        const rows =
+          (
+            Array.isArray(boardResult.data)
+              ? boardResult.data
+              : []
+          ).filter(
+            row =>
+              row &&
+              "season" === row.draft_mode
+          );
+
+        body.innerHTML =
+          rows.length
+            ? rows.map(row => `<tr>
+                <td>${Math.round(+row.rank || 0)}<\/td>
+                <td>${escapeHtml(row.display_name || "Anonymous")}<\/td>
+                <td class="scorecell">${Math.round(+row.score || 0).toLocaleString()}<\/td>
+                <td>${escapeHtml(formatRunDate(row.completed_at))}<\/td>
+                <td>${"hard" === row.difficulty ? "Hard" : "Normal"}<\/td>
+                <td>Season<\/td>
+                <td>${(+row.squad_overall || 0).toFixed(1)}<\/td>
+                <td>${ordinal(row.final_position)}<\/td>
+                <td>${Math.round(+row.points || 0)}<\/td>
+                <td>${+row.goal_difference > 0 ? "+" : ""}${Math.round(+row.goal_difference || 0)}<\/td>
+              <\/tr>`).join("")
+            : '<tr><td colspan="10" class="empty">No Standard Season scores in this period yet.<\/td><\/tr>';
+
+        if (SERVER_DAILY_ENABLED) {
+          const rankResult =
+            await onlineClient.rpc(
+              "get_my_global_leaderboard_rank",
+              {
+                p_period:
+                  reviewLeaderboardPeriod
+              }
+            );
+
+          if (rankResult.error) throw rankResult.error;
+
+          const rank = rankResult.data || {};
+
+          rankNode.textContent =
+            rank.hasScore
+              ? `Your rank: ${rank.rankLabel} · Best score: ${Math.round(+(
+                  rank.bestScore &&
+                  rank.bestScore.score
+                ) || 0).toLocaleString()}`
+              : "Your rank: Unranked"
+        } else {
+          rankNode.textContent =
+            "Standard Season leaderboard loaded."
+        }
+      } catch (error) {
+        console.warn(
+          "Could not load the Season Review Standard leaderboard.",
+          error
+        );
+        body.innerHTML =
+          '<tr><td colspan="10" class="empty">Standard Season leaderboard unavailable.<\/td><\/tr>';
+        rankNode.textContent =
+          "Your rank is temporarily unavailable."
       }
     }
 
@@ -7199,7 +7467,8 @@ Ct.myMatches.push({
           Ct.savedRun = saveMeta.run || completedRunData;
           renderFinalScorePanel(Ct.savedRun, saveMeta);
           xt("article").innerHTML = `<h3>${y.head}<\/h3><div class="byline">Season review · SPL 25/26 · Draft XI<\/div>` + y.paras.map(t => `<p>${t}<\/p>`).join("");
-          xt("endBlock").classList.add("on")
+          xt("endBlock").classList.add("on");
+          renderSeasonReviewLeaderboard(Ct.savedRun)
         }()
     }
 
@@ -7410,6 +7679,15 @@ xt("dailyStartBtn").addEventListener("click", async () => {
     xt("startNewDraftBtn").addEventListener("click", cancelSavedDraftAndStartNew);
     xt("refreshGlobalLeaderboardBtn").addEventListener("click", renderGlobalLeaderboard);
     xt("refreshDailyLeaderboardBtn").addEventListener("click", renderDailyLeaderboard);
+    xt("refreshReviewLeaderboardBtn").addEventListener("click", () => {
+      renderSeasonReviewLeaderboard()
+    });
+    xt("reviewLeaderboardTabs").querySelectorAll("button").forEach(button => {
+      button.addEventListener("click", () => {
+        reviewLeaderboardPeriod = button.dataset.period;
+        renderSeasonReviewLeaderboard()
+      })
+    });
     console.info(
       `SPL Draft ${PHASE4_PRODUCTION_BUILD}: secure drafting, season simulation, player statistics, awards and trusted scoring are active.`
     );
