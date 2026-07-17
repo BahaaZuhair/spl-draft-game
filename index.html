@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SPL Draft — Saudi Pro League</title>
 
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700&family=Noto+Kufi+Arabic:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -428,8 +429,12 @@ body.daily-run-active #restartCtlBtn{
 
 
 
+
+
 </head>
 <body>
+
+
 
 
 <button id="globalHomeBtn" class="global-home-btn" type="button" aria-label="Return to home" title="Home">
@@ -943,7 +948,7 @@ body.daily-run-active #restartCtlBtn{
   try {
     const PHASE6_NO_DATABASE_BUILD = !0,
       PHASE6_BUILD =
-        "phase7a-trusted-score-production-2026-07-17",
+        "phase7b-xss-hardened-production-2026-07-17",
       nt = ["00/01", "01/02", "02/03", "03/04", "04/05", "05/06", "06/07", "07/08", "08/09", "09/10", "10/11", "11/12", "12/13", "13/14", "14/15", "15/16", "16/17", "17/18", "18/19", "19/20", "20/21", "21/22", "22/23", "23/24", "24/25", "25/26"], lt = t => "number" == typeof t && isFinite(t) ? t : "" === t || null == t ? 0 : parseFloat(t) || 0, rt = {
       "Al-Hilal": {
         code: "HIL",
@@ -1482,6 +1487,7 @@ function getDerivedAIStrength(clubId) {
       SERVER_DAILY_RESUME_KEY = "spl_draft_secure_daily_v1",
       SERVER_SEASON_RESUME_KEY = "spl_draft_secure_season_v1",
       RUN_HISTORY_LIMIT = 100,
+      MAX_PROFILE_IMPORT_BYTES = 1024 * 1024,
       RUN_SCORE_CONFIG = {
         pointsValue: 100,
         winValue: 25,
@@ -1585,31 +1591,315 @@ function getDerivedAIStrength(clubId) {
       return value && "object" === typeof value && !Array.isArray(value) ? value : {}
     }
 
+    function normalizePlainText(value, maxLength = 120) {
+      return String(value == null ? "" : value)
+        .replace(/[\u0000-\u001F\u007F]/g, " ")
+        .replace(/[<>]/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, maxLength)
+    }
+
+    function safeFiniteNumber(value, fallback = 0, min = -1e7, max = 1e7) {
+      const number = Number(value);
+      return Number.isFinite(number)
+        ? Math.min(max, Math.max(min, number))
+        : fallback
+    }
+
+    function safeInteger(value, fallback = 0, min = -1e7, max = 1e7) {
+      return Math.round(
+        safeFiniteNumber(value, fallback, min, max)
+      )
+    }
+
+    function normalizeScoreBreakdown(raw) {
+      const value = safeObject(raw);
+      return {
+        pointsScore: safeInteger(value.pointsScore, 0, -1e7, 1e7),
+        positionBonus: safeInteger(value.positionBonus, 0, -1e7, 1e7),
+        winsBonus: safeInteger(value.winsBonus, 0, -1e7, 1e7),
+        goalsBonus: safeInteger(value.goalsBonus, 0, -1e7, 1e7),
+        goalDifferenceAdjustment: safeInteger(
+          value.goalDifferenceAdjustment,
+          0,
+          -1e7,
+          1e7
+        ),
+        overallBonus: safeInteger(value.overallBonus, 0, -1e7, 1e7),
+        difficultyMultiplier: safeFiniteNumber(
+          value.difficultyMultiplier,
+          1,
+          0,
+          10
+        ),
+        dailyMultiplier: safeFiniteNumber(
+          value.dailyMultiplier,
+          1,
+          0,
+          10
+        ),
+        subtotal: safeInteger(value.subtotal, 0, 0, 1e7),
+        finalScore: safeInteger(value.finalScore, 0, 0, 1e7)
+      }
+    }
+
+    function normalizeDraftedPlayer(raw) {
+      const value = safeObject(raw);
+      return {
+        playerId: normalizePlainText(value.playerId, 180),
+        name: normalizePlainText(value.name, 100),
+        club: normalizePlainText(value.club, 100),
+        season: normalizePlainText(value.season, 20),
+        position: normalizePlainText(value.position, 20),
+        rating: safeFiniteNumber(value.rating, 0, 0, 100)
+      }
+    }
+
+    function normalizeRunRecord(raw) {
+      const value = safeObject(raw),
+        topScorer = safeObject(value.topScorer),
+        topAssister = safeObject(value.topAssister),
+        bestPlayer = safeObject(value.bestPlayer),
+        normalized = {
+          runId: normalizePlainText(value.runId, 200),
+          completedAt: normalizePlainText(value.completedAt, 48),
+          teamName: normalizePlainText(value.teamName, 25),
+          difficulty: value.difficulty === "hard" ? "hard" : "normal",
+          draftMode: value.draftMode === "alltime" ? "alltime" : "season",
+          formation: normalizePlainText(value.formation, 60),
+          squadOverall: safeFiniteNumber(value.squadOverall, 0, 0, 100),
+          defenceRating: safeFiniteNumber(value.defenceRating, 0, 0, 100),
+          midfieldRating: safeFiniteNumber(value.midfieldRating, 0, 0, 100),
+          attackRating: safeFiniteNumber(value.attackRating, 0, 0, 100),
+          finalPosition: safeInteger(value.finalPosition, 18, 1, 18),
+          played: safeInteger(value.played, 0, 0, 34),
+          wins: safeInteger(value.wins, 0, 0, 34),
+          draws: safeInteger(value.draws, 0, 0, 34),
+          losses: safeInteger(value.losses, 0, 0, 34),
+          goalsFor: safeInteger(value.goalsFor, 0, 0, 1000),
+          goalsAgainst: safeInteger(value.goalsAgainst, 0, 0, 1000),
+          goalDifference: safeInteger(value.goalDifference, 0, -1000, 1000),
+          points: safeInteger(value.points, 0, 0, 200),
+          cleanSheets: safeInteger(value.cleanSheets, 0, 0, 34),
+          score: safeInteger(value.score, 0, 0, 1e7),
+          isDailyChallenge: value.isDailyChallenge === true,
+          dailyChallengeDate:
+            normalizePlainText(value.dailyChallengeDate, 20) || null,
+          dailyAttemptType:
+            value.dailyAttemptType === "official"
+              ? "official"
+              : value.dailyAttemptType === "practice"
+                ? "practice"
+                : null,
+          challengeId:
+            normalizePlainText(value.challengeId, 180) || null,
+          topScorer: {
+            name: normalizePlainText(topScorer.name, 100),
+            goals: safeInteger(topScorer.goals, 0, 0, 1000)
+          },
+          topAssister: {
+            name: normalizePlainText(topAssister.name, 100),
+            assists: safeInteger(topAssister.assists, 0, 0, 1000)
+          },
+          bestPlayer: {
+            name: normalizePlainText(bestPlayer.name, 100),
+            averageRating:
+              safeFiniteNumber(bestPlayer.averageRating, 0, 0, 10)
+          },
+          draftedPlayers:
+            (Array.isArray(value.draftedPlayers)
+              ? value.draftedPlayers
+              : [])
+              .slice(0, 11)
+              .map(normalizeDraftedPlayer),
+          scoreBreakdown:
+            normalizeScoreBreakdown(value.scoreBreakdown)
+        };
+
+      if (value.onlineSubmission) {
+        const submission = safeObject(value.onlineSubmission);
+        normalized.onlineSubmission = {
+          status: normalizePlainText(submission.status, 40),
+          attempts: safeInteger(submission.attempts, 0, 0, 100),
+          duplicate: submission.duplicate === true,
+          serverScore:
+            safeInteger(submission.serverScore, 0, 0, 1e7),
+          scoreId: normalizePlainText(submission.scoreId, 180),
+          lastError: normalizePlainText(submission.lastError, 180),
+          acceptedAt: normalizePlainText(submission.acceptedAt, 48),
+          updatedAt: normalizePlainText(submission.updatedAt, 48)
+        }
+      }
+
+      return normalized
+    }
+
+    function normalizePersonalRecords(raw) {
+      const result = {};
+      Object.entries(safeObject(raw))
+        .slice(0, 100)
+        .forEach(([key, item]) => {
+          const value = safeObject(item),
+            cleanKey = normalizePlainText(key, 80);
+          if (!cleanKey) return;
+          result[cleanKey] = {
+            value:
+              safeFiniteNumber(value.value, 0, -1e7, 1e7),
+            runId: normalizePlainText(value.runId, 200),
+            completedAt: normalizePlainText(value.completedAt, 48),
+            finalPosition:
+              safeInteger(value.finalPosition, 0, 0, 18),
+            squadOverall:
+              safeFiniteNumber(value.squadOverall, 0, 0, 100),
+            difficulty:
+              value.difficulty === "hard" ? "hard" : "normal",
+            playerName:
+              normalizePlainText(value.playerName, 100)
+          }
+        });
+      return result
+    }
+
+    function normalizeUsageMap(raw) {
+      const result = {};
+      Object.entries(safeObject(raw))
+        .slice(0, 500)
+        .forEach(([key, value]) => {
+          const cleanKey =
+            normalizePlainText(key, 160);
+          if (cleanKey) {
+            result[cleanKey] =
+              safeInteger(value, 0, 0, 1e6)
+          }
+        });
+      return result
+    }
+
+    function normalizeAchievements(raw) {
+      const source = safeObject(raw),
+        result = {};
+      Object.keys(ACHIEVEMENT_DEFINITIONS)
+        .forEach(id => {
+          const item = safeObject(source[id]);
+          if (item.unlockedAt) {
+            result[id] = {
+              unlockedAt:
+                normalizePlainText(item.unlockedAt, 48)
+            }
+          }
+        });
+      return result
+    }
+
+    function normalizeDailyHistory(raw) {
+      const result = {};
+      Object.entries(safeObject(raw))
+        .slice(0, 500)
+        .forEach(([key, item]) => {
+          const value = safeObject(item),
+            cleanKey =
+              normalizePlainText(key, 20);
+          if (!cleanKey) return;
+          result[cleanKey] = {
+            challengeId:
+              normalizePlainText(value.challengeId, 180),
+            seed:
+              normalizePlainText(value.seed, 180),
+            formation:
+              normalizePlainText(value.formation, 60),
+            fkey:
+              normalizePlainText(value.fkey, 30),
+            difficulty:
+              value.difficulty === "hard" ? "hard" : "normal",
+            draftMode:
+              value.draftMode === "alltime"
+                ? "alltime"
+                : "season",
+            status:
+              normalizePlainText(value.status, 30),
+            firstAttemptStartedAt:
+              normalizePlainText(
+                value.firstAttemptStartedAt,
+                48
+              ),
+            officialResult:
+              value.officialResult
+                ? normalizeRunRecord(value.officialResult)
+                : null
+          }
+        });
+      return result
+    }
+
     function normalizeLocalProfile(raw) {
       const base = createDefaultProfile();
-      if (!raw || "object" !== typeof raw || Array.isArray(raw)) return base;
-      const totals = { ...base.totals, ...safeObject(raw.totals) };
-      Object.keys(totals).forEach(key => totals[key] = Number.isFinite(+totals[key]) ? +totals[key] : 0);
-      const streaks = { ...base.streaks, ...safeObject(raw.streaks) };
-      Object.keys(streaks).forEach(key => streaks[key] = Number.isFinite(+streaks[key]) ? +streaks[key] : 0);
+      if (
+        !raw ||
+        "object" !== typeof raw ||
+        Array.isArray(raw)
+      ) return base;
+
+      const totals = {
+        ...base.totals,
+        ...safeObject(raw.totals)
+      };
+      Object.keys(totals).forEach(key => {
+        totals[key] =
+          safeFiniteNumber(
+            totals[key],
+            0,
+            -1e7,
+            1e7
+          )
+      });
+
+      const streaks = {
+        ...base.streaks,
+        ...safeObject(raw.streaks)
+      };
+      Object.keys(streaks).forEach(key => {
+        streaks[key] =
+          safeInteger(streaks[key], 0, 0, 1e6)
+      });
+
       const usageRaw = safeObject(raw.usage);
+
       return {
         version: 1,
-        teamName: "string" === typeof raw.teamName ? raw.teamName.slice(0, 25) : "",
-        createdAt: "string" === typeof raw.createdAt ? raw.createdAt : base.createdAt,
-        updatedAt: "string" === typeof raw.updatedAt ? raw.updatedAt : base.updatedAt,
+        teamName:
+          normalizePlainText(raw.teamName, 25),
+        createdAt:
+          normalizePlainText(raw.createdAt, 48) ||
+          base.createdAt,
+        updatedAt:
+          normalizePlainText(raw.updatedAt, 48) ||
+          base.updatedAt,
         totals,
         streaks,
         usage: {
-          formations: safeObject(usageRaw.formations),
-          clubs: safeObject(usageRaw.clubs),
-          seasons: safeObject(usageRaw.seasons),
-          players: safeObject(usageRaw.players)
+          formations:
+            normalizeUsageMap(usageRaw.formations),
+          clubs:
+            normalizeUsageMap(usageRaw.clubs),
+          seasons:
+            normalizeUsageMap(usageRaw.seasons),
+          players:
+            normalizeUsageMap(usageRaw.players)
         },
-        personalRecords: safeObject(raw.personalRecords),
-        achievements: safeObject(raw.achievements),
-        runHistory: Array.isArray(raw.runHistory) ? raw.runHistory.filter(item => item && "object" === typeof item).slice(0, RUN_HISTORY_LIMIT) : [],
-        dailyChallengeHistory: safeObject(raw.dailyChallengeHistory)
+        personalRecords:
+          normalizePersonalRecords(raw.personalRecords),
+        achievements:
+          normalizeAchievements(raw.achievements),
+        runHistory:
+          (Array.isArray(raw.runHistory)
+            ? raw.runHistory
+            : [])
+            .slice(0, RUN_HISTORY_LIMIT)
+            .map(normalizeRunRecord)
+            .filter(run => run.runId),
+        dailyChallengeHistory:
+          normalizeDailyHistory(raw.dailyChallengeHistory)
       }
     }
 
@@ -2962,8 +3252,103 @@ function getDerivedAIStrength(clubId) {
       renderRecordsScreen()
     }
 
+
+    function normalizeTeamNameForModeration(value) {
+      let text =
+        String(value == null ? "" : value)
+          .trim()
+          .toLowerCase();
+
+      text = text
+        .replace(/[ـًٌٍَُِّْ]/g, "")
+        .replace(/[أإآٱ]/g, "ا")
+        .replace(/ى/g, "ي")
+        .replace(/ؤ/g, "و")
+        .replace(/ئ/g, "ي")
+        .replace(/ة/g, "ه");
+
+      const leet = {
+        "0": "o", "1": "i", "3": "e",
+        "4": "a", "5": "s", "7": "t",
+        "@": "a", "$": "s", "!": "i"
+      };
+
+      text = text.replace(
+        /[013457@$!]/g,
+        character => leet[character] || character
+      );
+
+      const words = text
+        .replace(/[^a-z0-9ء-ي]+/g, " ")
+        .trim()
+        .replace(/\s+/g, " ");
+
+      return {
+        words,
+        compact: words.replace(/\s+/g, "")
+      }
+    }
+
+    function isAllowedTeamName(value) {
+      const raw =
+        String(value == null ? "" : value).trim();
+
+      if (!raw || raw.length > 25) return false;
+
+      const normalized =
+          normalizeTeamNameForModeration(raw),
+        blockedWords = new Set([
+          "dick", "cock", "cunt", "pussy",
+          "penis", "vagina", "fuck", "fucker",
+          "fucking", "shit", "bitch", "asshole",
+          "porn", "porno", "sex", "boob",
+          "boobs", "tit", "tits", "nude",
+          "naked", "زب", "زبي", "كس",
+          "شرموط", "شرموطه", "قحبه",
+          "منيوك", "طيز", "نيك", "ناك"
+        ]);
+
+      if (
+        normalized.words
+          .split(" ")
+          .some(word => blockedWords.has(word))
+      ) return false;
+
+      const blockedCompact = new Set([
+        "dick", "cock", "cunt", "pussy",
+        "penis", "vagina", "fuck", "fucker",
+        "fucking", "shit", "bitch", "asshole",
+        "porn", "porno", "sex", "boob",
+        "boobs", "tit", "tits", "nude",
+        "naked", "mydick", "suckmydick",
+        "fuckyou", "motherfucker", "زب",
+        "زبي", "كس", "شرموط", "شرموطه",
+        "قحبه", "منيوك", "طيز", "نيك",
+        "ناك", "كسمك", "كسامك",
+        "ياشرموط", "ياشرموطه", "ياقحبه",
+        "زبيفيك"
+      ]);
+
+      return !blockedCompact.has(normalized.compact)
+    }
+
+    function showTeamNameError(message) {
+      const errorNode = xt("nameErr");
+      errorNode.textContent = message;
+      errorNode.style.display = "block";
+      xt("teamNameInput").focus()
+    }
+
+    function clearTeamNameError() {
+      const errorNode = xt("nameErr");
+      errorNode.textContent =
+        "Please enter a team name — 1 to 25 characters, not just spaces.";
+      errorNode.style.display = "none"
+    }
+
     function persistTeamName(name) {
-      const clean = String(name || "").trim().slice(0, 25);
+      const clean =
+        normalizePlainText(name, 25);
       if (!clean) return "";
       Nt.teamName = clean;
       localProfile.teamName = clean;
@@ -3424,7 +3809,11 @@ function getDerivedAIStrength(clubId) {
     }
 
     function runScoreBreakdownHtml(run) {
-      const breakdown = run.scoreBreakdown || calculateRunScore(run);
+      const breakdown =
+        normalizeScoreBreakdown(
+          run.scoreBreakdown ||
+          calculateRunScore(run)
+        );
       return `<div class="breakdown-grid">
         <span>Points score <b>${breakdown.pointsScore.toLocaleString()}<\/b><\/span>
         <span>Position bonus <b>${breakdown.positionBonus.toLocaleString()}<\/b><\/span>
@@ -3566,12 +3955,29 @@ function getDerivedAIStrength(clubId) {
 
     function importLocalProfileFile(file) {
       if (!file) return;
+      if (
+        Number.isFinite(+file.size) &&
+        +file.size > MAX_PROFILE_IMPORT_BYTES
+      ) {
+        l("That backup is too large. Maximum size is 1 MB.");
+        xt("importRecordsFile").value = "";
+        return
+      }
       const reader = new FileReader;
       reader.onload = () => {
         try {
           const parsed = JSON.parse(String(reader.result || ""));
-          if (!parsed || "object" !== typeof parsed || Array.isArray(parsed) || !("version" in parsed) || !Array.isArray(parsed.runHistory) || !parsed.totals) throw new Error("Unsupported profile backup");
-          const normalized = normalizeLocalProfile(parsed);
+          if (
+            !parsed ||
+            "object" !== typeof parsed ||
+            Array.isArray(parsed) ||
+            !("version" in parsed) ||
+            !Array.isArray(parsed.runHistory) ||
+            !parsed.totals ||
+            parsed.runHistory.length > RUN_HISTORY_LIMIT
+          ) throw new Error("Unsupported profile backup");
+          const normalized =
+            normalizeLocalProfile(parsed);
           m("Import local records?", "This replaces the records currently saved in this browser.", "Import Records", () => {
             localProfile = normalized;
             Nt.teamName = localProfile.teamName || Nt.teamName;
@@ -3681,12 +4087,27 @@ function buildDailyChallenge() {
 
     function serverDailyPreview(challenge) {
       return {
-        dateKey: challenge.challengeDate,
-        challengeId: challenge.challengeId,
-        fkey: challenge.formationCode,
+        dateKey:
+          normalizePlainText(
+            challenge.challengeDate,
+            20
+          ),
+        challengeId:
+          normalizePlainText(
+            challenge.challengeId,
+            180
+          ),
+        fkey:
+          normalizePlainText(
+            challenge.formationCode,
+            30
+          ),
         formation:
-          challenge.formationName ||
-          challenge.formationCode,
+          normalizePlainText(
+            challenge.formationName ||
+            challenge.formationCode,
+            60
+          ),
         skips: +challenge.skips,
         difficulty: challenge.difficulty,
         mode: challenge.draftMode,
@@ -4217,11 +4638,20 @@ function buildDailyChallenge() {
       const name = xt("teamNameInput").value.trim();
 
       if (!name) {
-        xt("nameErr").style.display = "block";
-        xt("teamNameInput").focus();
+        showTeamNameError(
+          "Please enter a team name — 1 to 25 characters, not just spaces."
+        );
         return
       }
 
+      if (!isAllowedTeamName(name)) {
+        showTeamNameError(
+          "Please choose an appropriate team name."
+        );
+        return
+      }
+
+      clearTeamNameError();
       persistTeamName(name);
 
       if (!SERVER_DAILY_ENABLED) {
@@ -4721,28 +5151,93 @@ function V() {
     }
 
     function Z(t) {
-      return `<span class="cd" style="background:${(rt[t]||{}).color||"#888"}"><\/span>${t}`
+      return `<span class="cd" style="background:${(rt[t]||{}).color||"#888"}"><\/span>${escapeHtml(t)}`
     }
 
     function u(t) {
-      return `<span class="season">${t}<\/span>`
+      return `<span class="season">${escapeHtml(t)}<\/span>`
+    }
+
+    const SAFE_CARD_SLOTS = new Set([
+      "GK", "CB", "RB", "RWB", "LB", "LWB",
+      "CDM", "CM", "CAM", "RM", "RW",
+      "LM", "LW", "ST", "CF", "SS"
+    ]);
+
+    function normalizePlayerCard(raw) {
+      const card = safeObject(raw);
+      return {
+        ...card,
+        card_id:
+          normalizePlainText(card.card_id, 180),
+        player_id:
+          normalizePlainText(card.player_id, 180),
+        name:
+          normalizePlainText(card.name, 100),
+        name_ar:
+          normalizePlainText(card.name_ar, 100),
+        position:
+          normalizePlainText(card.position, 30),
+        nationality:
+          normalizePlainText(card.nationality, 80),
+        nationality_ar:
+          normalizePlainText(card.nationality_ar, 80),
+        club:
+          normalizePlainText(card.club, 100),
+        club_ar:
+          normalizePlainText(card.club_ar, 100),
+        season:
+          normalizePlainText(card.season, 20),
+        rating:
+          safeFiniteNumber(card.rating, 0, 0, 100),
+        apps:
+          safeFiniteNumber(card.apps, 0, 0, 1000),
+        minutes:
+          safeFiniteNumber(card.minutes, 0, 0, 100000),
+        goals:
+          safeFiniteNumber(card.goals, 0, 0, 1000),
+        assists:
+          safeFiniteNumber(card.assists, 0, 0, 1000),
+        clean_sheets:
+          card.clean_sheets === ""
+            ? ""
+            : safeFiniteNumber(card.clean_sheets, 0, 0, 1000),
+        goals_conceded:
+          card.goals_conceded === ""
+            ? ""
+            : safeFiniteNumber(card.goals_conceded, 0, 0, 5000),
+        eligible_slots:
+          (Array.isArray(card.eligible_slots)
+            ? card.eligible_slots
+            : [])
+            .map(slot =>
+              normalizePlainText(slot, 10).toUpperCase()
+            )
+            .filter(slot => SAFE_CARD_SLOTS.has(slot))
+            .slice(0, 6)
+      }
     }
 
     function serverOfferToLocalRoll(offer) {
       return {
-        club: offer.sourceClub,
-        season: offer.sourceSeason,
-        pool: Array.isArray(offer.cards)
-          ? offer.cards.map(card => ({
-              ...card,
-              rating: +card.rating,
-              eligible_slots: Array.isArray(card.eligible_slots)
-                ? card.eligible_slots
-                : []
-            }))
-          : [],
-        sourceClubAr: offer.sourceClubAr || "",
-        offerId: offer.offerId,
+        club:
+          normalizePlainText(offer.sourceClub, 100),
+        season:
+          normalizePlainText(offer.sourceSeason, 20),
+        pool:
+          Array.isArray(offer.cards)
+            ? offer.cards
+                .map(normalizePlayerCard)
+                .filter(card =>
+                  card.card_id &&
+                  card.player_id &&
+                  card.eligible_slots.length
+                )
+            : [],
+        sourceClubAr:
+          normalizePlainText(offer.sourceClubAr, 100),
+        offerId:
+          normalizePlainText(offer.offerId, 180),
         fittingSlotIndexes: Array.isArray(
           offer.fittingSlotIndexes
         )
@@ -5119,13 +5614,8 @@ const allClubNames =
       card,
       slotIndex
     ) {
-      const normalizedCard = {
-        ...card,
-        rating: +card.rating,
-        eligible_slots: Array.isArray(card.eligible_slots)
-          ? card.eligible_slots
-          : []
-      };
+      const normalizedCard =
+        normalizePlayerCard(card);
 
       const snapshot = {
         slotIndex,
@@ -5349,15 +5839,7 @@ const allClubNames =
             );
             const savedCard =
               saved && saved.card
-                ? {
-                    ...saved.card,
-                    rating: +saved.card.rating,
-                    eligible_slots: Array.isArray(
-                      saved.card.eligible_slots
-                    )
-                      ? saved.card.eligible_slots
-                      : []
-                  }
+                ? normalizePlayerCard(saved.card)
                 : null;
 
             return {
@@ -5597,6 +6079,14 @@ const allClubNames =
 
       const button = xt("dailyStartBtn"),
         clientRunId = makeRunId("daily");
+
+      if (!isAllowedTeamName(Jt())) {
+        n("scr-menu");
+        showTeamNameError(
+          "Please choose an appropriate team name."
+        );
+        return
+      }
 
       button.disabled = !0;
       button.textContent =
@@ -6036,9 +6526,9 @@ function z(t) {
       for (const t of s) {
         const s = document.createElement("button");
         s.className = "pcard";
-        const n = t.eligible_slots.map(t => `<span class="chip ${[...e].some(s=>Dt[s].includes(t))?"":"dim"}">${t}<\/span>`).join(""),
+        const n = t.eligible_slots.map(slot => `<span class="chip ${[...e].some(code=>Dt[code].includes(slot))?"":"dim"}">${escapeHtml(slot)}<\/span>`).join(""),
           l = "alltime" === gt.mode ? `peak ${t.season}${ot(t.club)!==ot(gt.roll.club)?" at "+ot(t.club):""}` : `${t.club} \xb7 ${t.season}`;
-        s.innerHTML = `\n      <div class="rt">${Math.round(t.rating)}<small>OVR<\/small><\/div>\n      <div class="who"><b>${t.name}<\/b><span class="ar">${t.name_ar||""}<\/span>\n        <div class="meta">${t.position} \xb7 ${l}<br>${k(t)}<\/div><\/div>\n      <div class="slots">${n}<\/div>`, s.addEventListener("click", () => w(t)), a.appendChild(s)
+        s.innerHTML = `\n      <div class="rt">${Math.round(t.rating)}<small>OVR<\/small><\/div>\n      <div class="who"><b>${escapeHtml(t.name)}<\/b><span class="ar">${escapeHtml(t.name_ar||"")}<\/span>\n        <div class="meta">${escapeHtml(t.position)} \xb7 ${escapeHtml(l)}<br>${escapeHtml(k(t))}<\/div><\/div>\n      <div class="slots">${n}<\/div>`, s.addEventListener("click", () => w(t)), a.appendChild(s)
       }
     }
 
@@ -6073,7 +6563,7 @@ function z(t) {
       if (1 === s.length) return void S(t, s[0].idx);
       gt.pendingPlayer = t, X(!1);
       const a = Y(s);
-      xt("rosterZone").innerHTML = `\n    <div class="slotchoice">\n      <div class="who">Where should <b>${t.name}<\/b> play?<\/div>\n      <div class="scbtns">${s.map(t=>`<button data-idx="${t.idx}">${a.get(t.idx)}<\/button>`).join("")}<\/div>\n      <button class="linkish" id="scCancel">choose a different player<\/button>\n    <\/div>`, xt("rosterZone").querySelectorAll(".scbtns button").forEach(t => {
+      xt("rosterZone").innerHTML = `\n    <div class="slotchoice">\n      <div class="who">Where should <b>${escapeHtml(t.name)}<\/b> play?<\/div>\n      <div class="scbtns">${s.map(slot=>`<button data-idx="${slot.idx}">${escapeHtml(a.get(slot.idx))}<\/button>`).join("")}<\/div>\n      <button class="linkish" id="scCancel">choose a different player<\/button>\n    <\/div>`, xt("rosterZone").querySelectorAll(".scbtns button").forEach(t => {
         t.addEventListener("click", () => S(gt.pendingPlayer, +t.dataset.idx))
       }), xt("scCancel").addEventListener("click", () => {
         gt.pendingPlayer = null, D(), X(gt.skipsLeft > 0)
@@ -6115,13 +6605,13 @@ function S(t, s) {
             const s = document.createElement("div");
             if (s.className = "slot" + (e.player ? " filled" : ""), s.style.left = e.x + "%", s.style.top = e.y + "%", e.player) {
               const n = e.player.name.split(" ").slice(-1)[0];
-              if (s.innerHTML = `<div class="disc">${Math.round(e.player.rating)}<\/div>\n        <div class="nm">${n}<small>${e.code}${"pitch"===t.id?" \xb7 "+e.player.season:""}<\/small><\/div>`, a) {
+              if (s.innerHTML = `<div class="disc">${Math.round(e.player.rating)}<\/div>\n        <div class="nm">${escapeHtml(n)}<small>${escapeHtml(e.code)}${"pitch"===t.id?" \xb7 "+escapeHtml(e.player.season):""}<\/small><\/div>`, a) {
                 const t = s.querySelector(".disc");
                 t.setAttribute("tabindex", "0"), t.addEventListener("click", () => j(e.idx)), t.addEventListener("keydown", t => {
                   "Enter" === t.key && j(e.idx)
                 })
               }
-            } else s.innerHTML = `<div class="disc">${e.code}<\/div>`;
+            } else s.innerHTML = `<div class="disc">${escapeHtml(e.code)}<\/div>`;
             t.appendChild(s)
           }
         }(xt("pitch"), gt.slots, !0), null != t) {
@@ -6141,10 +6631,10 @@ function S(t, s) {
         n = [];
       for (const l of gt.slots) l.idx !== t && (!l.player && f(a, l.code) ? n.push({
         t: l,
-        html: `Move to <b>${e.get(l.idx)}<\/b>`
+        html: `Move to <b>${escapeHtml(e.get(l.idx))}<\/b>`
       }) : l.player && f(a, l.code) && f(l.player, s.code) && n.push({
         t: l,
-        html: `Swap with <b>${l.player.name}<\/b> (${e.get(l.idx)})`
+        html: `Swap with <b>${escapeHtml(l.player.name)}<\/b> (${escapeHtml(e.get(l.idx))})`
       }));
       xt("swapSub").textContent = `${a.name} \u2014 currently ${e.get(t)}. Only legal moves are shown.`;
       const l = xt("swapList");
@@ -6436,11 +6926,19 @@ function S(t, s) {
     }
 
     function E(t) {
-      return t === Lt ? Jt().toUpperCase() : (rt[t] || {}).code || t
+      return normalizePlainText(
+        t === Lt
+          ? Jt().toUpperCase()
+          : (rt[t] || {}).code || t,
+        100
+      )
     }
 
     function Q(t) {
-      return t === Lt ? Jt() : t
+      return normalizePlainText(
+        t === Lt ? Jt() : t,
+        100
+      )
     }
 
     let pendingSecureSeasonResumeState = null,
@@ -6558,8 +7056,16 @@ function S(t, s) {
 
       const awards = Ct.serverLeagueAwards,
         normalizePlayer = player => ({
-          name: player && player.name || "—",
-          club: player && player.club || Lt,
+          name:
+            normalizePlainText(
+              player && player.name || "—",
+              100
+            ),
+          club:
+            normalizePlainText(
+              player && player.club || Lt,
+              100
+            ),
           rating: +(player && player.rating) || 0,
           g: +(player && player.goals) || 0,
           a: +(player && player.assists) || 0,
@@ -6567,8 +7073,16 @@ function S(t, s) {
           mine: !!(player && player.mine)
         }),
         normalizeGlove = player => ({
-          name: player && player.name || "—",
-          club: player && player.club || Lt,
+          name:
+            normalizePlainText(
+              player && player.name || "—",
+              100
+            ),
+          club:
+            normalizePlainText(
+              player && player.club || Lt,
+              100
+            ),
           cs: +(player && player.cleanSheets) || 0,
           ga: +(player && player.goalsAgainst) || 0,
           mine: !!(player && player.mine)
@@ -6689,18 +7203,10 @@ function S(t, s) {
         )
         .map(item => {
           const extras = [
-            item.g
-              ? `${item.g}G`
-              : "",
-            item.a
-              ? `${item.a}A`
-              : "",
-            item.cs
-              ? "CS"
-              : "",
-            item.motm
-              ? "MOTM"
-              : ""
+            item.g ? `${safeInteger(item.g,0,0,100)}G` : "",
+            item.a ? `${safeInteger(item.a,0,0,100)}A` : "",
+            item.cs ? "CS" : "",
+            item.motm ? "MOTM" : ""
           ].filter(Boolean);
 
           return `<span class="mrat ${
@@ -6710,16 +7216,18 @@ function S(t, s) {
                 ? "bad"
                 : ""
           }">${
-            item.s.code
+            escapeHtml(item.s.code)
           } ${
-            item.s.player.name
-              .split(" ")
-              .slice(-1)[0]
+            escapeHtml(
+              item.s.player.name
+                .split(" ")
+                .slice(-1)[0]
+            )
           }${
             extras.length
               ? ` · ${extras.join(" · ")}`
               : ""
-          }<b>${item.r.toFixed(1)}<\/b><\/span>`
+          }<b>${safeFiniteNumber(item.r,0,0,10).toFixed(1)}<\/b><\/span>`
         })
         .join("")
     }
@@ -6733,7 +7241,10 @@ function S(t, s) {
         serverFinalResult:
           state && state.result || null,
         replaced:
-          state && state.replacedClub || "—",
+          normalizePlainText(
+            state && state.replacedClub || "—",
+            100
+          ),
         eff: x(),
         fixtures: null,
         plannedResults: Array(34),
@@ -6833,9 +7344,9 @@ function S(t, s) {
             xt("latestTag").textContent =
               `Matchday ${Ct.md} — restored result`;
             xt("latestScore").innerHTML =
-              `<span>${Q(userMatch.h)}<\/span>` +
-              `<span class="sc">${userMatch.score[0]} – ${userMatch.score[1]}<\/span>` +
-              `<span>${Q(userMatch.a)}<\/span>`;
+              `<span>${escapeHtml(Q(userMatch.h))}<\/span>` +
+              `<span class="sc">${safeInteger(userMatch.score[0],0,0,100)} – ${safeInteger(userMatch.score[1],0,0,100)}<\/span>` +
+              `<span>${escapeHtml(Q(userMatch.a))}<\/span>`;
             Ct.lastRatings =
               trustedLatestRatings();
 
@@ -7299,12 +7810,12 @@ Ct.myMatches.push({
             r = n ? e.score[1] : e.score[0],
             d = l > r ? "win" : l < r ? "loss" : "",
             o = document.createElement("div");
-          o.className = "md" + (a ? " open" : ""), o.innerHTML = `<button class="mdhead" type="button">\n      <span class="mdn">MD ${t+1}<\/span>\n      <span class="mymatch">${E(e.h)}<span class="sc">${e.score[0]}\u2013${e.score[1]}<\/span>${E(e.a)}<\/span>\n    <\/button>\n    <div class="fx">${s.map(t=>{const s=t.h===Lt||t.a===Lt;return`<div class="fxrow ${s?"mine "+d:""}">\n        <span class="h">${s?Q(t.h):E(t.h)}<\/span>\n        <span class="sc">${t.score[0]} \u2013 ${t.score[1]}<\/span>\n        <span class="a">${s?Q(t.a):E(t.a)}<\/span><\/div>`}).join("")}<\/div>`, o.querySelector(".mdhead").addEventListener("click", () => o.classList.toggle("open"));
+          o.className = "md" + (a ? " open" : ""), o.innerHTML = `<button class="mdhead" type="button">\n      <span class="mdn">MD ${t+1}<\/span>\n      <span class="mymatch">${escapeHtml(E(e.h))}<span class="sc">${safeInteger(e.score[0],0,0,100)}\u2013${safeInteger(e.score[1],0,0,100)}<\/span>${escapeHtml(E(e.a))}<\/span>\n    <\/button>\n    <div class="fx">${s.map(t=>{const s=t.h===Lt||t.a===Lt;return`<div class="fxrow ${s?"mine "+d:""}">\n        <span class="h">${escapeHtml(s?Q(t.h):E(t.h))}<\/span>\n        <span class="sc">${safeInteger(t.score[0],0,0,100)} \u2013 ${safeInteger(t.score[1],0,0,100)}<\/span>\n        <span class="a">${escapeHtml(s?Q(t.a):E(t.a))}<\/span><\/div>`}).join("")}<\/div>`, o.querySelector(".mdhead").addEventListener("click", () => o.classList.toggle("open"));
           const i = xt("feed");
           i.querySelectorAll(".md.open").forEach(t => t.classList.remove("open")), i.prepend(o)
         }(a, e, t),
         function(t) {
-          xt("latestPanel").style.display = "block", xt("latestTag").textContent = `Matchday ${Ct.md} \u2014 latest result`, xt("latestScore").innerHTML = `<span>${Q(t.h)}<\/span><span class="sc">${t.score[0]} \u2013 ${t.score[1]}<\/span><span>${Q(t.a)}<\/span>`, xt("latestRats").innerHTML = renderLatestPlayerRatings(Ct.lastRatings)
+          xt("latestPanel").style.display = "block", xt("latestTag").textContent = `Matchday ${Ct.md} \u2014 latest result`, xt("latestScore").innerHTML = `<span>${escapeHtml(Q(t.h))}<\/span><span class="sc">${safeInteger(t.score[0],0,0,100)} \u2013 ${safeInteger(t.score[1],0,0,100)}<\/span><span>${escapeHtml(Q(t.a))}<\/span>`, xt("latestRats").innerHTML = renderLatestPlayerRatings(Ct.lastRatings)
         }(n), xt("mdNow").textContent = Ct.md, _(), tt(), Ct.md >= 34 && function() {
           Ct.done = !0, xt("nextMdBtn").style.display = "none", xt("skipEndBtn").style.display = "none", xt("restartCtlBtn").style.display = "inline-block";
           const t = _(),
@@ -7335,10 +7846,10 @@ Ct.myMatches.push({
 
       xt("awards").innerHTML = m
         ? `
-<div class="award"><div class="t">Top goal scorer<\/div><b>${m.topScorer.name}<\/b><span>${m.topScorer.g} goals${W(m.topScorer)}<\/span><\/div>
-<div class="award"><div class="t">Top assister<\/div><b>${m.topAssister.name}<\/b><span>${m.topAssister.a} assists${W(m.topAssister)}<\/span><\/div>
-<div class="award"><div class="t">Golden Glove<\/div><b>${m.glove.name}<\/b><span>${m.glove.cs} clean sheets — ${m.glove.mine ? Jt().toUpperCase() : Q(m.glove.club)}<\/span><\/div>
-<div class="award"><div class="t">Best player<\/div><b>${m.best.name}<\/b><span>${m.best.g} G · ${m.best.a} A${W(m.best)}<\/span><\/div>`
+<div class="award"><div class="t">Top goal scorer<\/div><b>${escapeHtml(m.topScorer.name)}<\/b><span>${m.topScorer.g} goals${escapeHtml(W(m.topScorer))}<\/span><\/div>
+<div class="award"><div class="t">Top assister<\/div><b>${escapeHtml(m.topAssister.name)}<\/b><span>${m.topAssister.a} assists${escapeHtml(W(m.topAssister))}<\/span><\/div>
+<div class="award"><div class="t">Golden Glove<\/div><b>${escapeHtml(m.glove.name)}<\/b><span>${m.glove.cs} clean sheets — ${escapeHtml(m.glove.mine ? Jt().toUpperCase() : Q(m.glove.club))}<\/span><\/div>
+<div class="award"><div class="t">Best player<\/div><b>${escapeHtml(m.best.name)}<\/b><span>${m.best.g} G · ${m.best.a} A${escapeHtml(W(m.best))}<\/span><\/div>`
         : '<div class="empty">Trusted league awards are temporarily unavailable. No local awards were generated.<\/div>';
           const f = gt.slots.map(t => ({
               s: t,
@@ -7439,7 +7950,7 @@ Ct.myMatches.push({
             saveMeta = saveRunResult(completedRunData);
           Ct.savedRun = saveMeta.run || completedRunData;
           renderFinalScorePanel(Ct.savedRun, saveMeta);
-          xt("article").innerHTML = `<h3>${y.head}<\/h3><div class="byline">Season review · SPL 25/26 · Draft XI<\/div>` + y.paras.map(t => `<p>${t}<\/p>`).join("");
+          xt("article").innerHTML = `<h3>${escapeHtml(y.head)}<\/h3><div class="byline">Season review · SPL 25/26 · Draft XI<\/div>` + y.paras.map(t => `<p>${escapeHtml(t)}<\/p>`).join("");
           xt("endBlock").classList.add("on");
           renderSeasonReviewLeaderboard(Ct.savedRun)
         }()
@@ -7457,7 +7968,7 @@ Ct.myMatches.push({
         pts: 3 * s.w + s.d
       })).sort((t, s) => s.pts - t.pts || s.gd - t.gd || s.gf - t.gf || Q(t.id).localeCompare(Q(s.id)));
       return xt("lgBody").innerHTML = t.map((t, s) => {
-        return `\n    <tr class="${t.id===Lt?"me":""}">\n      <td class="pos">${s+1}<\/td>\n      <td class="tn"><span class="dot" style="background:${a=t.id,a===Lt?"#E8B94B":(rt[a]||{}).color||"#888"}"><\/span>${Q(t.id)}<\/td>\n      <td>${t.p}<\/td><td>${t.w}<\/td><td>${t.d}<\/td><td>${t.l}<\/td>\n      <td>${t.gf}<\/td><td>${t.ga}<\/td><td>${t.gd>0?"+":""}${t.gd}<\/td><td class="pts">${t.pts}<\/td>\n    <\/tr>`;
+        return `\n    <tr class="${t.id===Lt?"me":""}">\n      <td class="pos">${s+1}<\/td>\n      <td class="tn"><span class="dot" style="background:${a=t.id,a===Lt?"#E8B94B":(rt[a]||{}).color||"#888"}"><\/span>${escapeHtml(Q(t.id))}<\/td>\n      <td>${t.p}<\/td><td>${t.w}<\/td><td>${t.d}<\/td><td>${t.l}<\/td>\n      <td>${t.gf}<\/td><td>${t.ga}<\/td><td>${t.gd>0?"+":""}${t.gd}<\/td><td class="pts">${t.pts}<\/td>\n    <\/tr>`;
         var a
       }).join(""), t
     }
@@ -7477,7 +7988,7 @@ Ct.myMatches.push({
       }) => {
         const a = s.apps ? (s.rsum / s.apps).toFixed(1) : "\u2014",
           e = Yt.has(t.code) ? `${s.cs}<span class="lbl">CS<\/span>` : "";
-        return `<div class="pstat">\n      <span class="pos">${t.code}<\/span><span>${t.player.name}<\/span>\n      <span class="n">${s.g}<span class="lbl">G<\/span><\/span>\n      <span class="n">${s.a}<span class="lbl">A<\/span><\/span>\n      <span class="n">${e}<\/span>\n      <span class="n">${a}<span class="lbl">AVG<\/span><\/span>\n    <\/div>`
+        return `<div class="pstat">\n      <span class="pos">${escapeHtml(t.code)}<\/span><span>${escapeHtml(t.player.name)}<\/span>\n      <span class="n">${s.g}<span class="lbl">G<\/span><\/span>\n      <span class="n">${s.a}<span class="lbl">A<\/span><\/span>\n      <span class="n">${e}<\/span>\n      <span class="n">${a}<span class="lbl">AVG<\/span><\/span>\n    <\/div>`
       }).join("")
     }
     const At = t => t[Math.floor(Math.random() * t.length)];
@@ -7563,10 +8074,25 @@ Ct.myMatches.push({
     }
 
     function st() {
-      const t = xt("teamNameInput").value.trim();
-      if (!t) return xt("nameErr").style.display = "block", void xt("teamNameInput").focus();
-      xt("nameErr").style.display = "none";
-      persistTeamName(t);
+      const teamName =
+        xt("teamNameInput").value.trim();
+
+      if (!teamName) {
+        showTeamNameError(
+          "Please enter a team name — 1 to 25 characters, not just spaces."
+        );
+        return
+      }
+
+      if (!isAllowedTeamName(teamName)) {
+        showTeamNameError(
+          "Please choose an appropriate team name."
+        );
+        return
+      }
+
+      clearTeamNameError();
+      persistTeamName(teamName);
       n("scr-setup")
     }! function() {
       xt("diffRow").querySelectorAll(".modecard").forEach(t => {
@@ -7584,7 +8110,7 @@ Ct.myMatches.push({
           n = document.createElement("button");
         n.className = "fcard";
         const l = a.slots.map(([t, s, a]) => `<i class="${"GK"===t?"gk":""}" style="left:${s}%;top:${.9*a+5}%"><\/i>`).join("");
-        n.innerHTML = `<h3>${a.name}<\/h3><div class="mini">${l}<\/div>`, n.addEventListener("click", () => {
+        n.innerHTML = `<h3>${escapeHtml(a.name)}<\/h3><div class="mini">${l}<\/div>`, n.addEventListener("click", () => {
           t.querySelectorAll(".fcard").forEach(t => t.classList.remove("sel")), n.classList.add("sel"), Tt.fkey = s, e()
         }), t.appendChild(n)
       }
@@ -7599,7 +8125,10 @@ Ct.myMatches.push({
       renderRecordsScreen();
       n("scr-records")
     });
-    xt("teamNameInput").addEventListener("input", () => xt("nameErr").style.display = "none");
+    xt("teamNameInput").addEventListener(
+      "input",
+      clearTeamNameError
+    );
     xt("teamNameInput").addEventListener("change", () => {
       const typedName = xt("teamNameInput").value.trim();
       typedName && persistTeamName(typedName)
@@ -7650,6 +8179,7 @@ xt("dailyStartBtn").addEventListener("click", async () => {
     xt("leaveSavedSeasonBtn").addEventListener("click", leaveSavedSecureSeason);
     xt("resumeSavedDraftBtn").addEventListener("click", resumeChosenSecureDraft);
     xt("startNewDraftBtn").addEventListener("click", cancelSavedDraftAndStartNew);
+
 
     xt("refreshGlobalLeaderboardBtn").addEventListener("click", renderGlobalLeaderboard);
     xt("refreshDailyLeaderboardBtn").addEventListener("click", renderDailyLeaderboard);
