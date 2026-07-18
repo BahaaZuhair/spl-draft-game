@@ -3,7 +3,7 @@
   try {
     const PHASE6_NO_DATABASE_BUILD = !0,
       PHASE6_BUILD =
-        "phase7e-turnstile-frontend-prep-2026-07-18",
+        "phase7e-turnstile-auto-retry-fix-2026-07-18",
       TURNSTILE_SITE_KEY = "0x4AAAAAAD4gP5siHnkvX-5i",
       TURNSTILE_SCRIPT_TIMEOUT_MS = 15000,
       nt = ["00/01", "01/02", "02/03", "03/04", "04/05", "05/06", "06/07", "07/08", "08/09", "09/10", "10/11", "11/12", "12/13", "13/14", "14/15", "15/16", "16/17", "17/18", "18/19", "19/20", "20/21", "21/22", "22/23", "23/24", "24/25", "25/26"], lt = t => "number" == typeof t && isFinite(t) ? t : "" === t || null == t ? 0 : parseFloat(t) || 0, rt = {
@@ -1067,7 +1067,8 @@ function getDerivedAIStrength(clubId) {
         if (!container) throw new Error("Security-check container is unavailable");
         removeTurnstileWidget();
         return new Promise((resolve, reject) => {
-          let settled = !1;
+          let settled = !1,
+            transientErrorCount = 0;
           const fail = message => {
             if (settled) return;
             settled = !0;
@@ -1080,6 +1081,8 @@ function getDerivedAIStrength(clubId) {
               size: "flexible",
               appearance: "interaction-only",
               action: "anonymous_sign_in",
+              retry: "auto",
+              "retry-interval": 1500,
               callback: token => {
                 if (settled) return;
                 settled = !0;
@@ -1087,9 +1090,26 @@ function getDerivedAIStrength(clubId) {
                 resolve(token)
               },
               "before-interactive-callback": () => updateTurnstileGate("Cloudflare needs a quick confirmation to continue.", "interactive"),
-              "error-callback": code => fail(`Cloudflare security check failed${code ? ` (${code})` : ""}`),
-              "expired-callback": () => fail("Cloudflare security check expired"),
-              "timeout-callback": () => fail("Cloudflare security check timed out")
+              "error-callback": code => {
+                if (settled) return !0;
+                transientErrorCount += 1;
+                console.warn("Turnstile verification error.", {
+                  code: code || "unknown",
+                  attempt: transientErrorCount
+                });
+                if (transientErrorCount <= 2) {
+                  updateTurnstileGate("Retrying the secure connection…", "background");
+                  return !1
+                }
+                fail(`Cloudflare security check failed${code ? ` (${code})` : ""}`);
+                return !0
+              },
+              "expired-callback": () => {
+                if (!settled) updateTurnstileGate("Refreshing the secure connection…", "background")
+              },
+              "timeout-callback": () => {
+                if (!settled) updateTurnstileGate("Retrying the secure connection…", "background")
+              }
             })
           } catch (error) {
             fail(error && error.message ? error.message : "Cloudflare security check failed")
