@@ -543,6 +543,7 @@ function getDerivedAIStrength(clubId) {
       SERVER_DRAFT_RESUME_KEY = "spl_draft_secure_run_v1",
       SERVER_DAILY_RESUME_KEY = "spl_draft_secure_daily_v1",
       SERVER_SEASON_RESUME_KEY = "spl_draft_secure_season_v1",
+      SERVER_ACTIVE_RESUME_KIND_KEY = "spl_draft_active_resume_kind_v1",
       RUN_HISTORY_LIMIT = 100,
       MAX_PROFILE_IMPORT_BYTES = 1024 * 1024,
       RUN_SCORE_CONFIG = {
@@ -1240,7 +1241,8 @@ function getDerivedAIStrength(clubId) {
             serverRunId,
             savedAt: new Date().toISOString()
           })
-        )
+        );
+        saveActiveSecureResumeKind("draft")
       } catch {}
     }
 
@@ -1264,7 +1266,8 @@ function getDerivedAIStrength(clubId) {
             serverRunId,
             updatedAt: new Date().toISOString()
           })
-        )
+        );
+        saveActiveSecureResumeKind("daily")
       } catch {}
     }
 
@@ -1312,6 +1315,80 @@ function getDerivedAIStrength(clubId) {
       } catch {
         return null
       }
+    }
+
+    function saveActiveSecureResumeKind(kind) {
+      if (![
+        "draft",
+        "daily",
+        "season"
+      ].includes(kind)) return;
+
+      try {
+        localStorage.setItem(
+          SERVER_ACTIVE_RESUME_KIND_KEY,
+          kind
+        )
+      } catch {}
+    }
+
+    function readActiveSecureResumeKind() {
+      try {
+        const kind = localStorage.getItem(
+          SERVER_ACTIVE_RESUME_KIND_KEY
+        );
+
+        return [
+          "draft",
+          "daily",
+          "season"
+        ].includes(kind)
+          ? kind
+          : ""
+      } catch {
+        return ""
+      }
+    }
+
+    function resumeMarkerTimestamp(marker) {
+      if (!marker || "object" !== typeof marker) return 0;
+
+      const raw =
+        marker.savedAt ||
+        marker.updatedAt ||
+        "";
+
+      const parsed = Date.parse(raw);
+      return Number.isFinite(parsed) ? parsed : 0
+    }
+
+    function preferredDraftResumeKind(
+      dailyMarker,
+      draftMarker
+    ) {
+      const activeKind =
+        readActiveSecureResumeKind();
+
+      if (
+        "daily" === activeKind &&
+        dailyMarker
+      ) return "daily";
+
+      if (
+        "draft" === activeKind &&
+        draftMarker
+      ) return "draft";
+
+      if (!dailyMarker) {
+        return draftMarker ? "draft" : ""
+      }
+
+      if (!draftMarker) return "daily";
+
+      return resumeMarkerTimestamp(dailyMarker) >
+        resumeMarkerTimestamp(draftMarker)
+          ? "daily"
+          : "draft"
     }
 
     async function runStartDraftShadowTest(localRun, expected) {
@@ -4179,7 +4256,7 @@ function getDailyCurrentChoice() {
       hasUnsavedRunProgress()
         ? m(
             "Return home?",
-            "Return home? Your current run progress will be lost.",
+            "Your draft will stay saved. Open Draft again to continue it or start a new one.",
             "Return Home",
             returnToMainMenu,
             trigger
@@ -5468,6 +5545,7 @@ const allClubNames =
 
     function showResumeDraftChoice(state) {
       pendingSecureResumeState = state;
+      saveActiveSecureResumeKind("draft");
 
       xt("resumeDraftTeam").textContent =
         state.teamName || "Unnamed Team";
@@ -6178,7 +6256,8 @@ function S(t, s) {
             clientRunId: gt && gt.runId || null,
             updatedAt: new Date().toISOString()
           })
-        )
+        );
+        saveActiveSecureResumeKind("season")
       } catch {}
     }
 
@@ -7299,7 +7378,38 @@ Ct.myMatches.push({
       clearTeamNameError();
       persistTeamName(teamName);
       n("scr-setup")
-    }! function() {
+    }
+
+    let standardDraftMenuBusy = !1;
+
+    async function openStandardDraftFromMenu() {
+      if (standardDraftMenuBusy) return;
+
+      standardDraftMenuBusy = !0;
+      const button = xt("menuStartBtn");
+      button.disabled = !0;
+
+      try {
+        if (
+          DRAFT_SERVER_MODE_ENABLED &&
+          readSecureDraftResumeMarker()
+        ) {
+          saveActiveSecureResumeKind("draft");
+
+          const foundSavedDraft =
+            await tryResumeSecureDraft();
+
+          if (foundSavedDraft) return
+        }
+
+        st()
+      } finally {
+        standardDraftMenuBusy = !1;
+        button.disabled = !1
+      }
+    }
+
+    ! function() {
       xt("diffRow").querySelectorAll(".modecard").forEach(t => {
         t.addEventListener("click", () => {
           xt("diffRow").querySelectorAll(".modecard").forEach(t => t.classList.remove("sel")), t.classList.add("sel"), Tt.skips = +t.dataset.v, e()
@@ -7322,7 +7432,10 @@ Ct.myMatches.push({
       xt("startBtn").addEventListener("click", () => startDraftRun())
     }();
     xt("teamNameInput").value = Nt.teamName;
-    xt("menuStartBtn").addEventListener("click", st);
+    xt("menuStartBtn").addEventListener(
+      "click",
+      openStandardDraftFromMenu
+    );
     xt("dailyChallengeBtn").addEventListener("click", openDailyChallengeScreen);
     xt("recordsBtn").addEventListener("click", () => {
       const typedName = xt("teamNameInput").value.trim();
@@ -7339,7 +7452,10 @@ Ct.myMatches.push({
       typedName && persistTeamName(typedName)
     });
     xt("teamNameInput").addEventListener("keydown", event => {
-      "Enter" === event.key && st()
+      if ("Enter" === event.key) {
+        event.preventDefault();
+        openStandardDraftFromMenu()
+      }
     });
     xt("howtoBtn").addEventListener("click", () => n("scr-howto"));
     xt("howtoBackBtn").addEventListener("click", () => n("scr-menu"));
@@ -7415,22 +7531,38 @@ xt("dailyStartBtn").addEventListener("click", async () => {
 
       if (DRAFT_SERVER_MODE_ENABLED) {
         const seasonMarker =
-          readSecureSeasonResumeMarker();
+            readSecureSeasonResumeMarker(),
+          draftMarker =
+            readSecureDraftResumeMarker(),
+          dailyMarker =
+            SERVER_DAILY_ENABLED
+              ? readSecureDailyResumeMarker()
+              : null;
 
         if (seasonMarker) {
           await tryResumeSecureSeason()
-        } else if (
-          SERVER_DAILY_ENABLED &&
-          readSecureDailyResumeMarker()
-        ) {
-          const resumedDaily =
-            await tryResumeSecureDailyChallenge();
-
-          if (!resumedDaily) {
-            await tryResumeSecureDraft()
-          }
         } else {
-          await tryResumeSecureDraft()
+          const preferredKind =
+            preferredDraftResumeKind(
+              dailyMarker,
+              draftMarker
+            );
+
+          if ("daily" === preferredKind) {
+            const resumedDaily =
+              await tryResumeSecureDailyChallenge();
+
+            if (!resumedDaily && draftMarker) {
+              await tryResumeSecureDraft()
+            }
+          } else if ("draft" === preferredKind) {
+            const foundSavedDraft =
+              await tryResumeSecureDraft();
+
+            if (!foundSavedDraft && dailyMarker) {
+              await tryResumeSecureDailyChallenge()
+            }
+          }
         }
       }
     }).catch(() => {});
