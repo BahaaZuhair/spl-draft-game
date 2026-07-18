@@ -4333,6 +4333,26 @@ function V() {
       return n.push(a), n.push(e([n[15], a])), t.innerHTML = n.map(t => `<li>${t}<\/li>`).join(""), t.style.transition = "none", t.style.transform = "translateY(0)", t.offsetHeight, 16
     }
 
+    function resetRouletteDisplay() {
+      const strips = [
+        xt("clubStrip"),
+        xt("seasonStrip")
+      ];
+
+      for (const strip of strips) {
+        if (!strip) continue;
+
+        strip.style.transition = "none";
+        strip.style.transform = "translateY(0)";
+        strip.innerHTML = ""
+      }
+
+      const rollButton = xt("rollBtn");
+      if (rollButton) {
+        rollButton.textContent = "Roll"
+      }
+    }
+
     function Z(t) {
       return `<span class="cd" style="background:${(rt[t]||{}).color||"#888"}"><\/span>${escapeHtml(t)}`
     }
@@ -5101,6 +5121,7 @@ const allClubNames =
         "none";
       xt("rosterPanel").style.display =
         "none";
+      resetRouletteDisplay();
 
       H();
       U();
@@ -7224,6 +7245,7 @@ Ct.myMatches.push({
       xt("formName").textContent = `${formation.name}${isDaily ? " · DAILY CHALLENGE" : ""}`;
       xt("rosterPanel").style.display = "none";
       xt("openSummaryBtn").style.display = "none";
+      resetRouletteDisplay();
       xt("rollBtn").disabled = !1;
       X(!1);
       H();
