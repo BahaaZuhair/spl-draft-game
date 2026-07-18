@@ -3,7 +3,9 @@
   try {
     const PHASE6_NO_DATABASE_BUILD = !0,
       PHASE6_BUILD =
-        "phase7d-strict-csp-production-2026-07-18",
+        "phase7e-turnstile-frontend-prep-2026-07-18",
+      TURNSTILE_SITE_KEY = "0x4AAAAAAD4gP5siHnkvX-5i",
+      TURNSTILE_SCRIPT_TIMEOUT_MS = 15000,
       nt = ["00/01", "01/02", "02/03", "03/04", "04/05", "05/06", "06/07", "07/08", "08/09", "09/10", "10/11", "11/12", "12/13", "13/14", "14/15", "15/16", "16/17", "17/18", "18/19", "19/20", "20/21", "21/22", "22/23", "23/24", "24/25", "25/26"], lt = t => "number" == typeof t && isFinite(t) ? t : "" === t || null == t ? 0 : parseFloat(t) || 0, rt = {
       "Al-Hilal": {
         code: "HIL",
@@ -1008,6 +1010,102 @@ function getDerivedAIStrength(clubId) {
       } else note.textContent = ""
     }
 
+    let turnstileWidgetId = null,
+      turnstileTokenPromise = null;
+
+    function updateTurnstileGate(message, state = "checking") {
+      const gate = document.getElementById("turnstileGate"),
+        status = document.getElementById("turnstileGateStatus"),
+        retry = document.getElementById("turnstileRetryBtn");
+      if (!gate || !status || !retry) return;
+      gate.hidden = !1;
+      gate.dataset.state = state;
+      gate.setAttribute("aria-hidden", "background" === state ? "true" : "false");
+      status.textContent = message;
+      retry.hidden = "error" !== state
+    }
+
+    function closeTurnstileGate() {
+      const gate = document.getElementById("turnstileGate");
+      if (gate) {
+        gate.hidden = !0;
+        gate.setAttribute("aria-hidden", "true")
+      }
+    }
+
+    function removeTurnstileWidget() {
+      if (null !== turnstileWidgetId && window.turnstile && "function" === typeof window.turnstile.remove) {
+        try {
+          window.turnstile.remove(turnstileWidgetId)
+        } catch (error) {
+          console.warn("Could not remove Turnstile widget.", error)
+        }
+      }
+      turnstileWidgetId = null;
+      const container = document.getElementById("turnstileWidget");
+      if (container) container.replaceChildren()
+    }
+
+    function waitForTurnstileApi() {
+      return new Promise((resolve, reject) => {
+        const startedAt = Date.now(),
+          check = () => {
+            if (window.turnstile && "function" === typeof window.turnstile.render) return resolve(window.turnstile);
+            if (Date.now() - startedAt >= TURNSTILE_SCRIPT_TIMEOUT_MS) return reject(new Error("Cloudflare security check did not load"));
+            window.setTimeout(check, 50)
+          };
+        check()
+      })
+    }
+
+    async function requestAnonymousSignInCaptchaToken() {
+      if (turnstileTokenPromise) return turnstileTokenPromise;
+      turnstileTokenPromise = (async () => {
+        updateTurnstileGate("Setting up your secure player identity…", "background");
+        const turnstile = await waitForTurnstileApi(),
+          container = document.getElementById("turnstileWidget");
+        if (!container) throw new Error("Security-check container is unavailable");
+        removeTurnstileWidget();
+        return new Promise((resolve, reject) => {
+          let settled = !1;
+          const fail = message => {
+            if (settled) return;
+            settled = !0;
+            reject(new Error(message))
+          };
+          try {
+            turnstileWidgetId = turnstile.render(container, {
+              sitekey: TURNSTILE_SITE_KEY,
+              theme: "auto",
+              size: "flexible",
+              appearance: "interaction-only",
+              action: "anonymous_sign_in",
+              callback: token => {
+                if (settled) return;
+                settled = !0;
+                updateTurnstileGate("Verified. Connecting to the game…", "background");
+                resolve(token)
+              },
+              "before-interactive-callback": () => updateTurnstileGate("Cloudflare needs a quick confirmation to continue.", "interactive"),
+              "error-callback": code => fail(`Cloudflare security check failed${code ? ` (${code})` : ""}`),
+              "expired-callback": () => fail("Cloudflare security check expired"),
+              "timeout-callback": () => fail("Cloudflare security check timed out")
+            })
+          } catch (error) {
+            fail(error && error.message ? error.message : "Cloudflare security check failed")
+          }
+        })
+      })();
+      try {
+        return await turnstileTokenPromise
+      } catch (error) {
+        updateTurnstileGate("The security check could not finish. Check your connection and retry.", "error");
+        throw error
+      } finally {
+        turnstileTokenPromise = null
+      }
+    }
+
     async function initializeOnlineBackend() {
       if (onlineReadyPromise) return onlineReadyPromise;
       onlineReadyPromise = (async () => {
@@ -1024,9 +1122,17 @@ function getDerivedAIStrength(clubId) {
         if (sessionError) throw sessionError;
         let session = sessionData && sessionData.session;
         if (!session) {
-          const { data, error } = await onlineClient.auth.signInAnonymously();
-          if (error) throw error;
-          session = data && data.session
+          const captchaToken = await requestAnonymousSignInCaptchaToken(),
+            { data, error } = await onlineClient.auth.signInAnonymously({
+              options: { captchaToken }
+            });
+          if (error) {
+            removeTurnstileWidget();
+            throw error
+          }
+          session = data && data.session;
+          removeTurnstileWidget();
+          closeTurnstileGate()
         }
         if (!session || !session.user) throw new Error("Anonymous session was not created");
         onlineUser = session.user;
@@ -1042,6 +1148,8 @@ function getDerivedAIStrength(clubId) {
       })().catch(error => {
         console.warn("Online leaderboard unavailable.", error);
         setOnlineStatus("offline", "Offline");
+        const gate = document.getElementById("turnstileGate");
+        if (gate && !gate.hidden) updateTurnstileGate("The secure connection could not be completed. Check your connection and retry.", "error");
         onlineReadyPromise = null;
         throw error
       });
@@ -7236,6 +7344,7 @@ xt("dailyStartBtn").addEventListener("click", async () => {
     xt("startNewDraftBtn").addEventListener("click", cancelSavedDraftAndStartNew);
 
 
+    xt("turnstileRetryBtn").addEventListener("click", () => window.location.reload());
     xt("refreshGlobalLeaderboardBtn").addEventListener("click", renderGlobalLeaderboard);
     xt("refreshDailyLeaderboardBtn").addEventListener("click", renderDailyLeaderboard);
     xt("refreshReviewLeaderboardBtn").addEventListener("click", () => {

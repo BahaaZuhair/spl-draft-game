@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; script-src 'self' https://cdn.jsdelivr.net; script-src-attr 'none'; style-src 'self' https://fonts.googleapis.com; style-src-elem 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src https://fonts.gstatic.com; connect-src 'self' https://wyxtriciyixkglcrppgh.supabase.co wss://wyxtriciyixkglcrppgh.supabase.co; img-src 'self' data:; media-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'self'; form-action 'self'; upgrade-insecure-requests">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; script-src 'self' https://cdn.jsdelivr.net https://challenges.cloudflare.com; script-src-attr 'none'; style-src 'self' https://fonts.googleapis.com; style-src-elem 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src https://fonts.gstatic.com; connect-src 'self' https://wyxtriciyixkglcrppgh.supabase.co wss://wyxtriciyixkglcrppgh.supabase.co https://challenges.cloudflare.com; img-src 'self' data:; media-src 'none'; frame-src https://challenges.cloudflare.com; worker-src 'none'; manifest-src 'self'; form-action 'self'; upgrade-insecure-requests">
 <title>SPL Draft — Saudi Pro League</title>
 
 
@@ -12,7 +12,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700&family=Noto+Kufi+Arabic:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./styles.css" integrity="sha384-CM7vHYV3i7sZwA/gQphT8ST/yZW5tTA4x3wF4VYe3hoIzH4oGqNCaMseYZfc3s9x" crossorigin="anonymous">
+<link rel="stylesheet" href="./styles.css" integrity="sha384-CHA/AnHnBNssCVQYYJtxFud0dzjJTfw7E0ctnNb2feAjjFpTAlZrfIi95cHapUzB" crossorigin="anonymous">
 
 
 
@@ -531,10 +531,22 @@
   </div>
 </div>
 
+<!-- Turnstile appears only while a brand-new anonymous player identity is being created. -->
+<div id="turnstileGate" class="turnstile-gate" role="dialog" aria-modal="true" aria-labelledby="turnstileGateTitle" hidden>
+  <div class="turnstile-gate-card">
+    <div class="turnstile-gate-kicker">Secure connection</div>
+    <h2 id="turnstileGateTitle">Preparing your player profile</h2>
+    <p id="turnstileGateStatus" aria-live="polite">Setting up your secure player identity…</p>
+    <div id="turnstileWidget" class="turnstile-widget" aria-label="Cloudflare security check"></div>
+    <button id="turnstileRetryBtn" class="btn ghost turnstile-retry" type="button" hidden>Retry</button>
+  </div>
+</div>
+
 <div class="toast" id="toast">Copied</div>
 <div class="achievement-toast" id="achievementToast" role="status" aria-live="polite"></div>
 
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer referrerpolicy="no-referrer"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.5" integrity="sha384-Fntl9b+IRzm2GKZK0c129fQFknWsn8pyxDejLO4wwds1LF9DSob2K2QXlfw8EIXn" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="./app.js" integrity="sha384-OVJBmQM4FGxYTwKA7JiX4AVffQPQDL7v0GgKcIyywmy8vsmwr73kanLgIBEzoQO+" crossorigin="anonymous"></script>
+<script src="./app.js" integrity="sha384-CK+Ha7rfHRWPvcV6QNcPdUARt0wDeKURkGH329cJKin3A5t4YP+uOvvCeo4L6SVb" crossorigin="anonymous"></script>
 </body>
 </html>
