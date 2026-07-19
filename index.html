@@ -12,7 +12,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700&family=Noto+Kufi+Arabic:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./styles.css" integrity="sha384-5nQq0+k71rP3ZuRAZ/cI5HNZ1Q1aiq+A1lt8lyTjegKyTTkJKTIOpf2MwEGtV+15" crossorigin="anonymous">
+<link rel="stylesheet" href="./styles.css" integrity="sha384-4wTUu+98ZEdOVmHAi7OxjZjQxwZdZQkZpm930ERrF01D4/1IrcdHiD/ocJWfVS/y" crossorigin="anonymous">
 
 
 
@@ -213,7 +213,7 @@
           <div class="opt-label">Draft mode</div>
           <div class="moderow" id="modeRow">
             <button class="modecard sel" data-v="season"><b>Ratings by Season</b><span>Roulette lands on a club and a season. You draft that exact season's card.</span></button>
-            <button class="modecard" data-v="alltime"><b>Max Rating All-Time</b><span>Same club-and-season rolls — but every player on the roster appears as his peak, best-ever card.</span></button>
+            <button class="modecard" data-v="alltime"><b>Max Rating All-Time</b><span>Same club-and-season rolls — but every player on the roster appears as his peak, best-ever card.</span><em class="mode-warning">Does not enter the online leaderboards.</em></button>
           </div>
         </div>
       </div>
@@ -517,11 +517,11 @@
   </div>
 </div>
 
-<div class="toast" id="toast">Copied</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div class="achievement-toast" id="achievementToast" role="status" aria-live="polite"></div>
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer referrerpolicy="no-referrer"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.5" integrity="sha384-Fntl9b+IRzm2GKZK0c129fQFknWsn8pyxDejLO4wwds1LF9DSob2K2QXlfw8EIXn" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="./app.js?v=arabic-design-final-1" integrity="sha384-kBYDNFRqj7yNRX099cMKXvgSjcx4Si8kH+qSZeV4jFGmF6e1qenJixgP7jXJa4I3" crossorigin="anonymous"></script>
+<script src="./app.js?v=arabic-ui-hotfix-1" integrity="sha384-4YVvMypCmh3+aqhhYBAJRvNYJaSZyrosqqRhggLcXQRaiRfhoc/M7jRFAxe2kaTW" crossorigin="anonymous"></script>
 </body>
 </html>

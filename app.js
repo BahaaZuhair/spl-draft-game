@@ -1109,6 +1109,7 @@ function getDerivedAIStrength(clubId) {
         "Roulette lands on a club and a season. You draft that exact season's card.": "العجلة تختار نادي وموسم، وتاخذ بطاقة اللاعب من نفس الموسم.",
         "Max Rating All-Time": "أعلى تقييم تاريخي",
         "Same club-and-season rolls — but every player on the roster appears as his peak, best-ever card.": "نفس النادي والموسم، لكن كل لاعب يظهر بأفضل بطاقة في مسيرته.",
+        "Does not enter the online leaderboards.": "ما يدخل لوحات الصدارة.",
         "Formation": "الخطة",
         "Start Draft": "ابدأ الدرافت",
         "Home": "الرئيسية",
@@ -1356,6 +1357,7 @@ function getDerivedAIStrength(clubId) {
         "Your saved season is still safe on the server.": "موسمك المحفوظ ما زال آمن على السيرفر.",
         "Your Daily season is still saved on the server.": "موسم تحدي اليوم ما زال محفوظ على السيرفر.",
         "Saved draft cancelled. You can start a new draft.": "تم إلغاء الدرافت المحفوظ، وتقدر تبدأ درافت جديد.",
+        "Saved draft cancelled.": "تم إلغاء الدرافت المحفوظ.",
         "Saved season left. You can start a new draft.": "تم ترك الموسم المحفوظ، وتقدر تبدأ درافت جديد.",
         "Recovery did not complete. Check your connection and retry.": "الاستعادة ما اكتملت. تأكد من الاتصال وجرّب مرة ثانية.",
         "Recovery did not complete. Check your connection, then press Retry Recovery.": "الاستعادة ما اكتملت. تأكد من الاتصال واضغط إعادة المحاولة.",
@@ -1665,6 +1667,7 @@ function getDerivedAIStrength(clubId) {
         ) {
           renderRecordsScreen()
         }
+        renderLocalizedFinalSummary();
         renderLocalizedSeasonExtremes();
         renderLocalizedLeagueAwards();
         renderStoredSeasonReview()
@@ -4800,10 +4803,21 @@ function getDailyCurrentChoice() {
       xt("startBtn").disabled = !(null != Tt.fkey && null != Tt.skips)
     }
 
-    let browserHistoryReady = false;
+    let browserHistoryReady = false,
+      toastHideTimer = null;
+
+    function hideToast() {
+      const toast = xt("toast");
+      if (toast) toast.classList.remove("on");
+      if (toastHideTimer !== null) {
+        clearTimeout(toastHideTimer);
+        toastHideTimer = null
+      }
+    }
 
     function n(t, options = {}) {
       const currentScreen = activeScreenId();
+      hideToast();
       document.querySelectorAll(".screen").forEach(t => t.classList.remove("on")), xt(t).classList.add("on"), window.scrollTo({
         top: 0,
         behavior: "smooth"
@@ -4815,8 +4829,14 @@ function getDailyCurrentChoice() {
     }
 
     function l(t) {
-      const s = xt("toast");
-      s.textContent = t, s.classList.add("on"), setTimeout(() => s.classList.remove("on"), 2e3)
+      const toast = xt("toast");
+      hideToast();
+      toast.textContent = t;
+      toast.classList.add("on");
+      toastHideTimer = window.setTimeout(() => {
+        toast.classList.remove("on");
+        toastHideTimer = null
+      }, 1600)
     }
 
     function r(t) {
@@ -6437,7 +6457,7 @@ const allClubNames =
           replaceHistory: !0
         });
 
-        l("Saved draft cancelled. You can start a new draft.")
+        l("Saved draft cancelled.")
       } catch (error) {
         console.warn(
           "Could not cancel the saved draft.",
@@ -8107,6 +8127,43 @@ Ct.myMatches.push({
     }
 
 
+
+    function renderLocalizedFinalSummary() {
+      const finalBand = document.getElementById("finalBand");
+      if (
+        !Ct ||
+        !Ct.done ||
+        !finalBand ||
+        !finalBand.classList.contains("on")
+      ) return;
+
+      const table = _(),
+        position = table.findIndex(row => row.id === Lt) + 1,
+        row = table[position - 1];
+
+      if (!row || position < 1) return;
+
+      const suffix =
+        position === 1
+          ? "st"
+          : position === 2
+            ? "nd"
+            : position === 3
+              ? "rd"
+              : "th";
+
+      xt("finalTitle").textContent = isArabicUi()
+        ? position === 1
+          ? `أبطال الدوري! ${Jt()} توّج باللقب`
+          : `${Jt()} أنهى الموسم في المركز ${position}`
+        : position === 1
+          ? `CHAMPIONS! ${Jt()} won the league`
+          : `${Jt()} finished ${position}${suffix}`;
+
+      xt("finalNote").textContent = isArabicUi()
+        ? `${row.pts} نقطة · 34 مباراة · ${row.w} فوز ${row.d} تعادل ${row.l} خسارة · سجل ${row.gf} واستقبل ${row.ga} · الفارق ${row.gd > 0 ? "+" : ""}${row.gd}`
+        : `${row.pts} pts · 34 played · ${row.w}W ${row.d}D ${row.l}L · ${row.gf} scored, ${row.ga} conceded · GD ${row.gd > 0 ? "+" : ""}${row.gd}`
+    }
 
     function renderLocalizedSeasonExtremes() {
       if (!Ct || !Array.isArray(Ct.myMatches)) return;
