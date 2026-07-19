@@ -3,7 +3,7 @@
   try {
     const PHASE6_NO_DATABASE_BUILD = !0,
       PHASE6_BUILD =
-        "phase7e-turnstile-auto-retry-fix-2026-07-18",
+        "arabic-design-final-2026-07-19",
       TURNSTILE_SITE_KEY = "0x4AAAAAAD4gP5siHnkvX-5i",
       TURNSTILE_SCRIPT_TIMEOUT_MS = 15000,
       nt = ["00/01", "01/02", "02/03", "03/04", "04/05", "05/06", "06/07", "07/08", "08/09", "09/10", "10/11", "11/12", "12/13", "13/14", "14/15", "15/16", "16/17", "17/18", "18/19", "19/20", "20/21", "21/22", "22/23", "23/24", "24/25", "25/26"], lt = t => "number" == typeof t && isFinite(t) ? t : "" === t || null == t ? 0 : parseFloat(t) || 0, rt = {
@@ -234,11 +234,16 @@ function getDerivedAIStrength(clubId) {
       const anchors = [
         [70, 74],
         [78, 84.75],
-        [80, 85.5],
-        [82, 87.5],
+        [80, 87.25],
+        [82, 89],
         [84, 90],
-        [86, 90.5],
-        [100, 104.5]
+        [85, 90.35],
+        [86, 91],
+        [87, 92],
+        [88, 93],
+        [89, 94],
+        [90, 95],
+        [100, 100]
       ];
       if (displayOverall <= anchors[0][0]) return anchors[0][1] - displayOverall;
       for (let index = 1; index < anchors.length; index++) {
@@ -250,7 +255,7 @@ function getDerivedAIStrength(clubId) {
           return calibratedRating - displayOverall
         }
       }
-      return 4.5
+      return Math.max(0, 100 - displayOverall)
     }
 
     function getUserSimulationStrength() {
@@ -269,7 +274,7 @@ function getDerivedAIStrength(clubId) {
         simMid: Math.min(100, summary.mid + simulationScaleBoost),
         simAtt: Math.min(100, summary.att + simulationScaleBoost),
         simulationScaleBoost,
-        source: "drafted-xi-calibrated-v6.2"
+        source: "drafted-xi-calibrated-arabic-final"
       }
     }
 
@@ -707,9 +712,12 @@ function getDerivedAIStrength(clubId) {
       return {
         playerId: normalizePlainText(value.playerId, 180),
         name: normalizePlainText(value.name, 100),
+        nameAr: normalizePlainText(value.nameAr, 100),
         club: normalizePlainText(value.club, 100),
+        clubAr: normalizePlainText(value.clubAr, 100),
         season: normalizePlainText(value.season, 20),
         position: normalizePlainText(value.position, 20),
+        positionAr: normalizePlainText(value.positionAr, 40),
         rating: safeFiniteNumber(value.rating, 0, 0, 100)
       }
     }
@@ -754,14 +762,17 @@ function getDerivedAIStrength(clubId) {
             normalizePlainText(value.challengeId, 180) || null,
           topScorer: {
             name: normalizePlainText(topScorer.name, 100),
+            nameAr: normalizePlainText(topScorer.nameAr, 100),
             goals: safeInteger(topScorer.goals, 0, 0, 1000)
           },
           topAssister: {
             name: normalizePlainText(topAssister.name, 100),
+            nameAr: normalizePlainText(topAssister.nameAr, 100),
             assists: safeInteger(topAssister.assists, 0, 0, 1000)
           },
           bestPlayer: {
             name: normalizePlainText(bestPlayer.name, 100),
+            nameAr: normalizePlainText(bestPlayer.nameAr, 100),
             averageRating:
               safeFiniteNumber(bestPlayer.averageRating, 0, 0, 10)
           },
@@ -971,6 +982,768 @@ function getDerivedAIStrength(clubId) {
       }
     }
 
+
+    const UI_LANGUAGE_KEY = "splDraftLanguage_v1",
+      CLUB_NAMES_AR = Object.freeze({
+        "Al-Hilal": "الهلال",
+        "Al-Nassr FC": "النصر",
+        "Al-Ittihad Club": "الاتحاد",
+        "Al-Ahli SFC": "الأهلي",
+        "Al-Qadsiah FC": "القادسية",
+        "Al-Ettifaq FC": "الاتفاق",
+        "Al-Shabab FC": "الشباب",
+        "Al-Taawoun FC": "التعاون",
+        "Al-Fateh SC": "الفتح",
+        "Al-Fayha FC": "الفيحاء",
+        "Al-Khaleej FC": "الخليج",
+        "Al-Okhdood Club": "الأخدود",
+        "Al-Okhdood": "الأخدود",
+        "Damac FC": "ضمك",
+        "Al-Riyadh SC": "الرياض",
+        "Al-Hazem SC": "الحزم",
+        "Al-Hazem": "الحزم",
+        "Al-Kholood Club": "الخلود",
+        "Al-Najmah SC": "النجمة",
+        "NEOM SC": "نيوم",
+        "Abha": "أبها",
+        "Al-Adalah": "العدالة",
+        "Al-Batin": "الباطن",
+        "Al-Orobah": "العروبة",
+        "Al-Raed": "الرائد",
+        "Al-Tai": "الطائي",
+        "Al-Wehda": "الوحدة",
+        "Al-Faisaly FC": "الفيصلي",
+        "Najran SC": "نجران",
+        "Hajer Club": "هجر",
+        "Ohod Club": "أحد",
+        "Al-Ansar": "الأنصار",
+        "Al-Shoulla FC": "الشعلة",
+        "Al-Nahdah FC": "النهضة",
+        "Al-Watani": "الوطني",
+        "Al-Ain": "العين",
+        "Sdoos Club": "سدوس"
+      }),
+      POSITION_NAMES_AR = Object.freeze({
+        GK: "حارس", CB: "قلب دفاع", LB: "ظهير أيسر", RB: "ظهير أيمن",
+        LWB: "جناح أيسر", RWB: "جناح أيمن", CDM: "محور", CM: "وسط",
+        CAM: "صانع لعب", LAM: "وسط هجومي", LM: "وسط أيسر", RM: "وسط أيمن",
+        LW: "جناح أيسر", RW: "جناح أيمن", ST: "مهاجم", CF: "مهاجم", SS: "مهاجم ثانٍ"
+      }),
+      UI_TEXT_AR = Object.freeze({
+        "Leaderboards": "لوحات الصدارة",
+        "Open leaderboards": "افتح لوحات الصدارة",
+        "Start Game": "ابدأ اللعب",
+        "Daily Challenge": "تحدي اليوم",
+        "How to Play": "طريقة اللعب",
+        "Enter Your Team Name": "اكتب اسم فريقك",
+        "Enter your team name": "اكتب اسم فريقك",
+        "e.g. Desert Falcons": "مثال: صقور نجد",
+        "Please enter a team name — 1 to 25 characters, not just spaces.": "اكتب اسم فريق من حرف إلى 25 حرف، مو مسافات بس.",
+        "Please choose an appropriate team name.": "اختر اسم فريق مناسب.",
+        "Draft a squad from 26 seasons of the Saudi Pro League, then take it through a full 34-matchday campaign.": "كوّن تشكيلتك من 26 موسم في الدوري السعودي، وخض فيها موسم كامل من 34 جولة.",
+
+        "1 · Name your team": "1 · سمّ فريقك",
+        "Your team name appears in match results, the league table and the season awards.": "اسم فريقك يظهر في النتائج وجدول الدوري وجوائز الموسم.",
+        "2 · Set up the run": "2 · جهّز المحاولة",
+        "Difficulty:": "الصعوبة:",
+        "Normal Mode gives you 2 skips for the whole run — a skip rerolls a club you don't like. Hard Mode gives no skips: every roll is final.": "النمط العادي يعطيك تخطّيين خلال الدرافت. النمط الصعب بدون تخطّي، وكل لفة نهائية.",
+        "Draft mode:": "نمط الدرافت:",
+        "drafts the exact card of the season the roulette lands on and is eligible for global leaderboards.": "يعرض بطاقة اللاعب من الموسم اللي وقفت عليه العجلة، ويدخل لوحات الصدارة.",
+        "uses the same rolls, but every player appears as his best-ever card and does not enter the online leaderboards.": "يستخدم نفس اللفات، لكن كل لاعب يظهر بأفضل بطاقة تاريخية له وما يدخل لوحات الصدارة.",
+        "Formation:": "الخطة:",
+        "pick one of 22 shapes. Every drafted player must fit one of its positions.": "اختر واحدة من 22 خطة، وكل لاعب لازم يناسب أحد مراكزها.",
+        "3 · Draft your XI": "3 · كوّن تشكيلتك",
+        "Each round, two roulettes land on a club and a season — anywhere from 00/01 to 25/26. Pick one player from that roster who fits an open slot. The roulette only offers pools that can fill one of your open positions. Repeat until your XI is complete.": "في كل جولة تختار العجلتان نادي وموسم من 00/01 إلى 25/26. اختر لاعب يناسب مركز فاضي، وكررها لين تكتمل التشكيلة.",
+        "4 · Kick-off": "4 · بداية الموسم",
+        "Review your squad rating and title odds. You can edit positions before the season auto-starts after a 10-second countdown — or kick off immediately.": "راجع تقييم تشكيلتك وفرصها، وعدّل المراكز قبل بداية الموسم أو ابدأ مباشرة.",
+        "5 · The season": "5 · الموسم",
+        "Your draft enters the 25/26 league and plays all 34 matchdays. Play game by game or skip to the end. Standings, player stats and awards are tracked throughout.": "فريقك يدخل دوري 25/26 ويلعب 34 جولة. تقدر تلعب جولة بجولة أو تروح للنهاية، والجدول والإحصائيات والجوائز تتحدث طوال الموسم.",
+        "6 · Full time": "6 · نهاية الموسم",
+        "See your final position, season record, league table, squad statistics, awards and a season-review article. Restart Run starts a fresh draft any time.": "شاهد مركزك النهائي وسجل الموسم والجدول وإحصائيات التشكيلة والجوائز وتقرير الموسم. وتقدر تبدأ درافت جديد بأي وقت.",
+        "Connecting to the online leaderboard…": "جاري الاتصال بلوحة الصدارة…",
+        "Connecting to today’s Daily leaderboard…": "جاري الاتصال بترتيب تحدي اليوم…",
+        "Test Server Roll": "اختبار لفة السيرفر",
+        "Test Server Skip": "اختبار تخطّي السيرفر",
+        "Test Server Selection": "اختبار اختيار السيرفر",
+        "P": "لعب",
+        "W": "ف",
+        "D": "ت",
+        "L": "خ",
+        "GF": "له",
+        "GA": "عليه",
+        "GD": "الفارق",
+        "Pts": "ن",
+        "Back": "رجوع",
+        "Leaderboards & Records": "لوحات الصدارة والسجل",
+        "Compare your best seasons, check today’s challenge, and review your latest runs.": "قارن أفضل مواسمك، تابع تحدي اليوم، وراجع آخر محاولاتك.",
+        "Standard Season Leaderboard": "ترتيب الموسم العادي",
+        "Ratings by Season runs only. Each player can appear with up to their best ten results.": "خاص بنمط تقييم الموسم، ويظهر لكل لاعب أفضل عشر نتائج.",
+        "Daily Challenge Leaderboard": "ترتيب تحدي اليوم",
+        "Today’s no-skip challenge. The first three attempts are eligible for this leaderboard.": "تحدي اليوم بدون تخطّي، وأول ثلاث محاولات تدخل الترتيب.",
+        "Personal Records": "أرقامك الشخصية",
+        "Statistics": "الإحصائيات",
+        "Achievements": "الإنجازات",
+        "Latest 10 Runs": "آخر 10 محاولات",
+        "Daily Challenge History": "سجل تحدي اليوم",
+        "Connecting": "جاري الاتصال",
+        "Refresh": "تحديث",
+        "Today": "اليوم",
+        "This Week": "هذا الأسبوع",
+        "This Month": "هذا الشهر",
+        "All Time": "كل الوقت",
+        "Team": "الفريق",
+        "Score": "النقاط",
+        "Date": "التاريخ",
+        "Difficulty": "الصعوبة",
+        "Draft": "الدرافت",
+        "Finish": "المركز",
+        "Attempt": "المحاولة",
+        "Set up your run": "جهّز درافتك",
+        "Choose your difficulty, draft mode, and formation. Every round two roulettes decide which club — and which season — you draft from.": "اختر الصعوبة ونمط الدرافت والخطة. في كل جولة تحدد العجلتان النادي والموسم اللي بتختار منه.",
+        "Normal Mode — 2 Skips": "عادي — تخطّيين",
+        "Two rerolls per run for clubs you don't like.": "عندك تخطّيين إذا ما ناسبك النادي.",
+        "Hard Mode — No Skips": "صعب — بدون تخطّي",
+        "Every roll is final. No rerolls, no mercy.": "كل لفة نهائية، ما فيه إعادة.",
+        "Draft mode": "نمط الدرافت",
+        "Ratings by Season": "تقييم الموسم",
+        "Roulette lands on a club and a season. You draft that exact season's card.": "العجلة تختار نادي وموسم، وتاخذ بطاقة اللاعب من نفس الموسم.",
+        "Max Rating All-Time": "أعلى تقييم تاريخي",
+        "Same club-and-season rolls — but every player on the roster appears as his peak, best-ever card.": "نفس النادي والموسم، لكن كل لاعب يظهر بأفضل بطاقة في مسيرته.",
+        "Formation": "الخطة",
+        "Start Draft": "ابدأ الدرافت",
+        "Home": "الرئيسية",
+        "Restart Run": "ابدأ من جديد",
+        "Pick": "الاختيار",
+        "Squad rating so far": "تقييم التشكيلة حتى الآن",
+        "Club": "النادي",
+        "Season": "الموسم",
+        "Roll": "لف",
+        "Use Skip": "استخدم التخطّي",
+        "The roulette only offers club–season pools that can fill one of your open positions.": "العجلة ما تعرض إلا نادي وموسم يقدرون يغطون مركز فاضي عندك.",
+        "Squad summary": "ملخص التشكيلة",
+        "Season 25/26": "موسم 25/26",
+        "Your draft": "فريقك",
+        "Matchday": "الجولة",
+        "Play Next Game": "العب المباراة الجاية",
+        "Skip To End": "إلى نهاية الموسم",
+        "Final run score": "نقاط المحاولة",
+        "Copy Result": "انسخ النتيجة",
+        "View Records": "شاهد السجل",
+        "Your squad this season": "تشكيلتك هذا الموسم",
+        "top scorer": "الهداف",
+        "top assister": "الأكثر صناعة",
+        "Clean sheets": "شباك نظيفة",
+        "team total": "إجمالي الفريق",
+        "Biggest win": "أكبر فوز",
+        "Biggest defeat": "أكبر خسارة",
+        "League awards": "جوائز الدوري",
+        "Leaderboard": "لوحة الصدارة",
+        "Loading leaderboard…": "جاري تحميل الترتيب…",
+        "Squad complete": "التشكيلة اكتملت",
+        "overall": "التقييم العام",
+        "defence": "الدفاع",
+        "midfield": "الوسط",
+        "attack": "الهجوم",
+        "Best player": "أفضل لاعب",
+        "Club diversity": "تنوع الأندية",
+        "Start Simulation": "ابدأ الموسم",
+        "Edit positions": "عدّل المراكز",
+        "Change position": "غيّر المركز",
+        "Cancel": "إلغاء",
+        "Recovering your secure season": "جاري استعادة موسمك",
+        "Restoring your saved squad, league table and latest revealed matchday from the server.": "نسترجع تشكيلتك وجدول الدوري وآخر جولة محفوظة من السيرفر.",
+        "Retry Recovery": "أعد المحاولة",
+        "Start New Draft": "ابدأ درافت جديد",
+        "You have an unfinished draft": "عندك درافت ما اكتمل",
+        "Your secure draft is saved on the server. Choose whether to continue it or start fresh.": "درافتك محفوظ على السيرفر. كمّل من مكانك أو ابدأ من جديد.",
+        "Progress": "التقدم",
+        "Skips left": "التخطيات المتبقية",
+        "Resume Draft": "كمّل الدرافت",
+        "Starting a new draft securely cancels this saved run and expires its active roulette offer.": "بدء درافت جديد يلغي المحاولة المحفوظة والعرض الحالي.",
+        "Status": "الحالة",
+        "Continue": "كمّل",
+        "Start Over": "ابدأ من جديد",
+        "Secure connection": "اتصال آمن",
+        "Preparing your player profile": "جاري تجهيز ملفك",
+        "Setting up your secure player identity…": "نجهّز هويتك الآمنة…",
+        "Retry": "إعادة المحاولة",
+        "Copied": "تم النسخ",
+        "Test your luck with no skips and controlled positions.": "اختبر حظك بدون تخطّي، والمراكز محددة لك.",
+        "Leaderboard attempts left": "محاولات الترتيب المتبقية",
+        "Hard — No Skips": "صعب — بدون تخطّي",
+        "Challenge ID": "معرّف التحدي",
+        "Start Daily Challenge": "ابدأ تحدي اليوم",
+        "Choose Continue or Start Over": "اختر تكمل أو تبدأ من جديد",
+
+        "This attempt can enter today’s separate Daily leaderboard. Starting it consumes one of your three allowed leaderboard attempts.": "هذه المحاولة تدخل ترتيب اليوم، وبدؤها يستهلك واحدة من محاولاتك الثلاث.",
+        "Your three leaderboard attempts have been used. You may continue playing, but later runs will not enter any online leaderboard.": "استخدمت محاولات الترتيب الثلاث. تقدر تكمل لعب، لكن المحاولات الجاية ما تدخل الترتيب.",
+        "Review the result or choose another run. Only the first three attempts can enter the Daily leaderboard.": "راجع النتيجة أو ابدأ محاولة ثانية. أول ثلاث محاولات فقط تدخل ترتيب اليوم.",
+        "Continue it or start over.": "كمّلها أو ابدأ من جديد.",
+        "The server owns the formation, difficulty, attempt type, roulette and final score.": "السيرفر يحدد الخطة والصعوبة ونوع المحاولة والعجلة والنتيجة النهائية.",
+        "Reading today’s trusted challenge…": "جاري تحميل تحدي اليوم الآمن…",
+        "Check the connection and Edge Function logs, then reopen Daily Challenge.": "تأكد من الاتصال ثم افتح تحدي اليوم من جديد.",
+        "Practice Attempt": "محاولة تدريبية",
+        "Practice": "تدريب",
+        "Saved": "محفوظة",
+        "Starting": "جاري البدء",
+        "Draft in progress": "الدرافت مستمر",
+        "Season in progress": "الموسم مستمر",
+        "Season completed": "الموسم مكتمل",
+        "Cancelled": "ملغاة",
+        "Expired": "منتهية",
+        "Daily Challenge unavailable": "تحدي اليوم غير متاح",
+        "Could not load the secure challenge.": "تعذر تحميل التحدي الآمن.",
+        "Try again": "جرّب مرة ثانية",
+        "No completed runs yet.": "ما عندك محاولات مكتملة للحين.",
+        "No Daily Challenge attempts yet.": "ما لعبت تحدي اليوم للحين.",
+        "No leaderboard scores yet.": "ما فيه نتائج في الترتيب للحين.",
+        "No player here fits your open positions. Rolling again…": "ما فيه لاعب يناسب مراكزك الفاضية. بنلف مرة ثانية…",
+        "No legal moves or swaps for this player right now.": "ما فيه نقل أو تبديل قانوني لهذا اللاعب حالياً.",
+        "Return home?": "ترجع للرئيسية؟",
+        "Return Home": "ارجع للرئيسية",
+        "Result copied.": "تم نسخ النتيجة.",
+        "Could not copy automatically.": "ما قدرنا ننسخ النتيجة تلقائياً.",
+        "Online": "متصل",
+        "Offline": "غير متصل",
+        "Hard": "صعب",
+        "Normal": "عادي",
+        "Daily": "يومي",
+        "Expected league finish": "التوقعات في الدوري",
+        "Champion": "بطل الدوري",
+        "Top 3": "ضمن الثلاثة الأوائل",
+        "Top 5": "ضمن الخمسة الأوائل",
+        "Mid-table": "وسط الجدول",
+        "Relegation battle": "صراع الهبوط",
+        "Perfect 34–0 season": "موسم كامل 34–0",
+        "Points": "النقاط",
+        "Wins": "فوز",
+        "Draws": "تعادل",
+        "Losses": "خسارة",
+        "Goals for": "له",
+        "Goals against": "عليه",
+        "Best finish": "أفضل مركز",
+        "Highest score": "أعلى نقاط",
+        "Runs completed": "محاولات مكتملة",
+        "Titles": "بطولات",
+        "Top goal scorer": "هداف الدوري",
+        "Top assister": "الأكثر صناعة",
+        "Golden Glove": "القفاز الذهبي",
+        "Best Player": "أفضل لاعب",
+        "Season review": "تقرير الموسم",
+
+        "Average final position": "متوسط المركز النهائي",
+        "Average points": "متوسط النقاط",
+        "Average run score": "متوسط نقاط المحاولة",
+        "Average squad overall": "متوسط تقييم التشكيلة",
+        "Best Daily Challenge score": "أفضل نتيجة في تحدي اليوم",
+        "Best Hard Mode score": "أفضل نتيجة في النمط الصعب",
+        "Best Normal Mode score": "أفضل نتيجة في النمط العادي",
+        "Best goal difference": "أفضل فارق أهداف",
+        "Best league finish": "أفضل مركز في الدوري",
+        "Fewest goals conceded": "أقل عدد أهداف مستقبلة",
+        "Hard Mode completions": "مواسم النمط الصعب",
+        "Highest points": "أعلى رصيد نقاط",
+        "Highest run score": "أعلى نقاط محاولة",
+        "Highest squad overall": "أعلى تقييم تشكيلة",
+        "Highest-rated drafted player": "أعلى لاعب تم اختياره",
+        "Longest championship streak": "أطول سلسلة بطولات",
+        "Longest top-four streak": "أطول سلسلة ضمن الأربعة",
+        "Most clean sheets": "أكثر شباك نظيفة",
+        "Most goals scored": "أكثر أهداف مسجلة",
+        "Most wins": "أكثر انتصارات",
+        "Most-drafted club": "أكثر نادي تم الاختيار منه",
+        "Most-drafted player": "أكثر لاعب تم اختياره",
+        "Most-drafted season": "أكثر موسم تم الاختيار منه",
+        "Most-used formation": "أكثر خطة استخداماً",
+        "Normal Mode completions": "مواسم النمط العادي",
+        "Official Daily Challenges": "تحديات يومية رسمية",
+        "Runs started": "محاولات بدأت",
+        "Top-four finishes": "مراكز ضمن الأربعة",
+        "Top-two finishes": "مراكز ضمن الاثنين",
+        "Total draws": "إجمالي التعادلات",
+        "Total goals conceded": "إجمالي الأهداف المستقبلة",
+        "Total goals scored": "إجمالي الأهداف المسجلة",
+        "Total losses": "إجمالي الخسائر",
+        "Total wins": "إجمالي الانتصارات",
+        "FIRST XI": "التشكيلة الأولى",
+        "FULL SEASON": "موسم كامل",
+        "CHAMPIONS": "أبطال الدوري",
+        "BACK TO BACK": "بطولتان متتاليتان",
+        "DYNASTY": "سلالة البطولات",
+        "HARD WORK": "المهمة الصعبة",
+        "HARD MODE CHAMPION": "بطل النمط الصعب",
+        "INVINCIBLE": "بدون هزيمة",
+        "CENTURIONS": "نادي المئة",
+        "GOAL MACHINE": "ماكينة أهداف",
+        "IRON DEFENCE": "دفاع حديدي",
+        "TOP TWO": "ضمن الاثنين",
+        "ELITE DRAFT": "درافت النخبة",
+        "SUPER TEAM": "الفريق الخارق",
+        "HISTORIAN": "المؤرخ",
+        "CLUB COLLECTOR": "جامع الأندية",
+        "PERFECTLY BALANCED": "توازن مثالي",
+        "NO SECOND CHANCES": "بدون فرصة ثانية",
+        "DAILY DEBUT": "أول تحدي يومي",
+        "DAILY ROUTINE": "روتين يومي",
+        "Complete your first draft.": "أكمل أول درافت لك.",
+        "Complete your first league season.": "أكمل أول موسم دوري لك.",
+        "Finish first.": "حقق المركز الأول.",
+        "Win two consecutive completed seasons.": "حقق بطولتين متتاليتين.",
+        "Win three consecutive completed seasons.": "حقق ثلاث بطولات متتالية.",
+        "Complete a season in Hard Mode.": "أكمل موسماً بالنمط الصعب.",
+        "Win the league in Hard Mode.": "حقق الدوري بالنمط الصعب.",
+        "Complete a season without losing.": "أكمل موسماً من دون خسارة.",
+        "Finish with at least 100 points.": "أنه الموسم بـ100 نقطة على الأقل.",
+        "Score at least 100 league goals.": "سجّل 100 هدف في الدوري على الأقل.",
+        "Concede 20 or fewer league goals.": "استقبل 20 هدفاً أو أقل.",
+        "Finish first or second.": "أنه الموسم أول أو ثاني.",
+        "Complete a squad with an overall of at least 87.": "أكمل تشكيلة بتقييم 87 على الأقل.",
+        "Complete a squad with an overall of at least 90.": "أكمل تشكيلة بتقييم 90 على الأقل.",
+        "Draft players from at least eight different seasons.": "اختر لاعبين من ثمانية مواسم مختلفة على الأقل.",
+        "Draft players from at least eight different clubs.": "اختر لاعبين من ثمانية أندية مختلفة على الأقل.",
+        "Finish a squad with defence, midfield and attack all rated at least 85.": "أنه الدرافت ودفاعك ووسطك وهجومك كلهم 85 على الأقل.",
+        "Complete the Daily Challenge once.": "أكمل تحدي اليوم مرة.",
+        "Complete official Daily Challenges on three different dates.": "أكمل تحديات يومية رسمية في ثلاثة أيام مختلفة.",
+        "Complete 10 league seasons.": "أكمل 10 مواسم.",
+        "Complete 50 league seasons.": "أكمل 50 موسماً.",
+        "New Personal Best": "رقم شخصي جديد",
+        "Not completed": "غير مكتمل",
+        "Eligible attempt": "محاولة مؤهلة",
+        "Practice run": "محاولة تدريبية",
+        "Continue / View Result": "كمّل / شاهد النتيجة",
+        "Continue from where you stopped, or start over with a fresh run.": "كمّل من مكانك أو ابدأ محاولة جديدة.",
+        "Continue to review this attempt, or start a new Practice attempt.": "شاهد نتيجة المحاولة أو ابدأ محاولة تدريبية جديدة.",
+        "Daily Challenge completed": "تحدي اليوم مكتمل",
+        "Daily Challenge in progress": "تحدي اليوم مستمر",
+        "Daily Challenge resumed.": "تم استكمال تحدي اليوم.",
+        "Daily Challenge saved — open Daily Challenge to resume.": "تحدي اليوم محفوظ — افتحه من الرئيسية عشان تكمل.",
+        "Daily Challenge practice attempts stay local and are not submitted to the global leaderboard.": "المحاولات التدريبية ما تدخل لوحة الصدارة.",
+        "Forfeit Attempt & Start Over": "الغِ المحاولة وابدأ من جديد",
+        "Forfeit this leaderboard attempt?": "تلغي محاولة الترتيب؟",
+        "Starting over cancels this Practice attempt and creates another Practice run.": "البدء من جديد يلغي المحاولة التدريبية الحالية وينشئ محاولة جديدة.",
+        "Start Practice Attempt": "ابدأ محاولة تدريبية",
+        "Starting secure Daily…": "جاري بدء تحدي اليوم الآمن…",
+        "Please wait…": "لحظة…",
+        "Preparing season…": "جاري تجهيز الموسم…",
+        "Restoring season…": "جاري استعادة الموسم…",
+        "Secure season ready.": "الموسم الآمن جاهز.",
+        "Secure season restored.": "تمت استعادة الموسم.",
+        "Secure Daily Challenge restored.": "تمت استعادة تحدي اليوم.",
+        "Secure Daily Challenge started.": "بدأ تحدي اليوم.",
+        "Secure Daily season restored.": "تمت استعادة موسم تحدي اليوم.",
+        "Score added to the global leaderboard!": "تمت إضافة نتيجتك للوحة الصدارة!",
+        "Score already saved online.": "النتيجة محفوظة مسبقاً.",
+        "Online score submission pending — it will retry when a connection is available.": "إرسال النتيجة معلّق وبيتم تلقائياً عند عودة الاتصال.",
+        "Online score could not be submitted yet. Your local result is safe and will retry later.": "ما قدرنا نرسل النتيجة الآن، لكنها محفوظة وبتنرسل لاحقاً.",
+        "Online leaderboard unavailable.": "لوحة الصدارة غير متاحة حالياً.",
+        "Standard Season leaderboard loaded.": "تم تحميل ترتيب الموسم العادي.",
+        "Loading your Daily rank…": "جاري تحميل ترتيبك اليومي…",
+        "Loading your Standard Season rank…": "جاري تحميل ترتيبك في الموسم العادي…",
+        "Your Daily rank is temporarily unavailable.": "ترتيبك اليومي غير متاح مؤقتاً.",
+        "Your rank is temporarily unavailable.": "ترتيبك غير متاح مؤقتاً.",
+        "Your rank: Unranked": "ترتيبك: غير مصنف",
+        "Your Daily rank: Unranked": "ترتيبك اليومي: غير مصنف",
+        "Unknown date": "تاريخ غير معروف",
+        "Unnamed Team": "فريق بدون اسم",
+        "My Draft": "فريقي",
+        "Your Draft": "فريقك",
+        "Restart this run?": "تبدأ المحاولة من جديد؟",
+        "Restart this run? Your current draft progress will be lost.": "تبدأ من جديد؟ تقدم الدرافت الحالي بيروح.",
+        "Return home? Your current draft progress will be lost.": "ترجع للرئيسية؟ تقدم الدرافت الحالي بيروح.",
+        "Return home? Your current run progress will be lost.": "ترجع للرئيسية؟ تقدم المحاولة الحالية بيروح.",
+        "Your draft will stay saved. Open Draft again to continue it or start a new one.": "درافتك بيبقى محفوظ. افتح اللعب مرة ثانية عشان تكمل أو تبدأ من جديد.",
+        "Your Daily Challenge will stay saved. Open Daily Challenge from the home screen to resume it.": "تحدي اليوم بيبقى محفوظ. افتحه من الرئيسية عشان تكمل.",
+        "Your saved season is still safe on the server.": "موسمك المحفوظ ما زال آمن على السيرفر.",
+        "Your Daily season is still saved on the server.": "موسم تحدي اليوم ما زال محفوظ على السيرفر.",
+        "Saved draft cancelled. You can start a new draft.": "تم إلغاء الدرافت المحفوظ، وتقدر تبدأ درافت جديد.",
+        "Saved season left. You can start a new draft.": "تم ترك الموسم المحفوظ، وتقدر تبدأ درافت جديد.",
+        "Recovery did not complete. Check your connection and retry.": "الاستعادة ما اكتملت. تأكد من الاتصال وجرّب مرة ثانية.",
+        "Recovery did not complete. Check your connection, then press Retry Recovery.": "الاستعادة ما اكتملت. تأكد من الاتصال واضغط إعادة المحاولة.",
+        "The next matchday could not be loaded. Your season is safely saved.": "تعذر تحميل الجولة الجاية، وموسمك محفوظ بأمان.",
+        "The secure season could not start. Check your connection and try again.": "تعذر بدء الموسم الآمن. تأكد من الاتصال وجرّب مرة ثانية.",
+        "The secure season service is unavailable. Your completed draft is saved; retry when the connection is restored.": "خدمة الموسم غير متاحة حالياً. درافتك مكتمل ومحفوظ، وجرّب بعد عودة الاتصال.",
+        "The saved draft could not be restored. Please try again.": "تعذر استعادة الدرافت المحفوظ. جرّب مرة ثانية.",
+        "The saved draft could not be cancelled. Check your connection and try again.": "تعذر إلغاء الدرافت المحفوظ. تأكد من الاتصال وجرّب.",
+        "The saved Daily Challenge could not be restored. Check your connection and try again.": "تعذر استعادة تحدي اليوم. تأكد من الاتصال وجرّب.",
+        "The Daily Challenge pool could not fill this position.": "خيارات تحدي اليوم ما قدرت تغطي هذا المركز.",
+        "Cloudflare needs a quick confirmation to continue.": "نحتاج تحقق سريع من Cloudflare عشان نكمل.",
+        "Verified. Connecting to the game…": "تم التحقق. جاري الاتصال باللعبة…",
+        "Refreshing the secure connection…": "جاري تحديث الاتصال الآمن…",
+        "Retrying the secure connection…": "جاري إعادة محاولة الاتصال الآمن…",
+        "The secure connection could not be completed. Check your connection and retry.": "تعذر إكمال الاتصال الآمن. تأكد من اتصالك وجرّب.",
+        "The security check could not finish. Check your connection and retry.": "التحقق الأمني ما اكتمل. تأكد من اتصالك وجرّب.",
+        "Could not start the game — please update your browser and reload.": "تعذر تشغيل اللعبة — حدّث المتصفح وأعد تحميل الصفحة.",
+        "English": "English",
+        "Arabic": "عربي",
+        "Max Rating All-Time does not enter the online leaderboards.": "نمط أعلى تقييم تاريخي ما يدخل لوحات الصدارة.",
+        "Ratings by Season runs only. Daily Challenge uses its own board, and Max Rating All-Time never appears here.": "الترتيب هذا لمحاولات تقييم الموسم فقط. تحدي اليوم له ترتيب مستقل، ونمط أعلى تقييم تاريخي ما يظهر هنا.",
+        "Today’s Daily leaderboard. Each player appears once with their best score from the first three eligible attempts.": "ترتيب تحدي اليوم. يظهر كل لاعب بأفضل نتيجة من أول ثلاث محاولات مؤهلة.",
+        "This Practice run does not enter the leaderboard. Today’s eligible scores are shown below.": "محاولة التدريب ما تدخل الترتيب. نتائج محاولاتك المؤهلة لليوم تظهر تحت.",
+        "This standard run is finalized and submitted only by the trusted server.": "نتيجة الموسم العادي تعتمد وتُرسل من السيرفر الموثوق فقط.",
+        "Online score submission failed.": "تعذر إرسال النتيجة للترتيب.",
+        "Could not load global leaderboard.": "تعذر تحميل ترتيب الموسم العادي.",
+        "Could not load Daily leaderboard.": "تعذر تحميل ترتيب تحدي اليوم.",
+        "Could not load the Season Review Daily leaderboard.": "تعذر تحميل ترتيب تحدي اليوم في تقرير الموسم.",
+        "Could not load the Season Review Standard leaderboard.": "تعذر تحميل ترتيب الموسم العادي في تقرير الموسم.",
+        "Your Daily rank: Unranked · Complete one of your first three attempts to enter.": "ترتيبك اليومي: غير مصنف · أكمل واحدة من أول ثلاث محاولات عشان تدخل الترتيب.",
+        "Local records could not be saved on this browser.": "تعذر حفظ سجلك على هذا المتصفح.",
+        "No Daily scores have been completed today.": "ما فيه نتائج مكتملة لتحدي اليوم للحين.",
+        "No global scores in this period yet.": "ما فيه نتائج في هذه الفترة للحين.",
+        "No eligible Daily scores have been completed yet.": "ما فيه نتائج يومية مؤهلة مكتملة للحين.",
+        "No Standard Season scores in this period yet.": "ما فيه نتائج للموسم العادي في هذه الفترة للحين.",
+        "No Daily Challenge attempts saved yet.": "ما عندك محاولات محفوظة لتحدي اليوم.",
+        "Incomplete": "غير مكتملة",
+        "Official attempt": "محاولة رسمية",
+        "Server verified": "موثقة من السيرفر",
+        "restored result": "نتيجة مستعادة",
+        "Man of the Match": "رجل المباراة",
+        "MOTM": "رجل المباراة",
+        "Challenge": "التحدي",
+        "Finished": "المركز",
+        "Record": "السجل",
+        "Goals": "الأهداف",
+        "Squad Overall": "تقييم التشكيلة",
+        "Mode": "النمط",
+        "Can you beat my score?": "تقدر تتجاوز نتيجتي؟",
+        "Complete a Hard Mode draft and season.": "أكمل درافت وموسم بالنمط الصعب.",
+        "Could not start the secure draft.": "تعذر بدء الدرافت الآمن.",
+        "Secure player selection is required in this Phase 6 build.": "اختيار اللاعب الآمن مطلوب.",
+        "Secure selection is unavailable. No local fallback exists.": "الاختيار الآمن غير متاح حالياً.",
+        "The next secure offer could not be loaded.": "تعذر تحميل العرض الآمن التالي.",
+        "The server rejected this player selection.": "السيرفر رفض اختيار هذا اللاعب.",
+        "Secure server draft could not start. Restart the run after checking the Edge Function logs.": "تعذر بدء الدرافت من السيرفر. جرّب تبدأ محاولة جديدة.",
+        "Secure server draft: creating your private authenticated run…": "جاري إنشاء محاولتك الآمنة…",
+        "Ready to test the secure server roulette.": "العجلة الآمنة جاهزة.",
+        "The local draft remains unchanged and usable.": "الدرافت الحالي ما تغير.",
+        "The local roulette still works normally.": "العجلة تعمل بشكل طبيعي.",
+        "No wins this season.": "ما حقق الفريق أي فوز هذا الموسم.",
+        "Unbeaten all season.": "أنهى الفريق الموسم بدون خسارة.",
+      });
+
+    let uiLanguage = (() => {
+      try {
+        return localStorage.getItem(UI_LANGUAGE_KEY) === "en" ? "en" : "ar"
+      } catch {
+        return "ar"
+      }
+    })(),
+      uiTranslationBusy = false,
+      lastSeasonReviewData = null;
+
+    function isArabicUi() {
+      return uiLanguage === "ar"
+    }
+
+    function localizedPlayerName(player) {
+      if (!player) return "—";
+      return normalizePlainText(
+        isArabicUi() && (player.name_ar || player.nameAr)
+          ? (player.name_ar || player.nameAr)
+          : player.name,
+        100
+      ) || "—"
+    }
+
+    function localizedClubName(club, clubAr = "") {
+      if (!isArabicUi()) return normalizePlainText(club, 100);
+      return normalizePlainText(
+        clubAr || CLUB_NAMES_AR[ot(club)] || CLUB_NAMES_AR[club] || club,
+        100
+      )
+    }
+
+    function localizedFormationName(name) {
+      const value = normalizePlainText(name, 60);
+      if (!isArabicUi()) return value;
+      return value
+        .replace(/\bHolding\b/g, "محور")
+        .replace(/\bAttack\b/g, "هجومية")
+        .replace(/\bFlat\b/g, "مسطحة")
+    }
+
+    function localizedPositionName(playerOrCode) {
+      if (typeof playerOrCode === "string") {
+        return isArabicUi()
+          ? POSITION_NAMES_AR[playerOrCode] || playerOrCode
+          : playerOrCode
+      }
+      if (!playerOrCode) return "";
+      return isArabicUi()
+        ? normalizePlainText(
+            playerOrCode.position_ar ||
+            playerOrCode.positionAr ||
+            POSITION_NAMES_AR[playerOrCode.position] ||
+            playerOrCode.position,
+            60
+          )
+        : normalizePlainText(playerOrCode.position, 60)
+    }
+
+    function translatedExactText(source) {
+      if (!isArabicUi()) return source;
+      const trimmed = source.trim();
+      if (!trimmed) return source;
+      if (UI_TEXT_AR[trimmed]) {
+        return source.replace(trimmed, UI_TEXT_AR[trimmed])
+      }
+      if (CLUB_NAMES_AR[trimmed]) {
+        return source.replace(trimmed, CLUB_NAMES_AR[trimmed])
+      }
+
+      let match;
+      if ((match = trimmed.match(/^Daily Challenge — (.+)$/))) {
+        return source.replace(trimmed, `تحدي اليوم — ${match[1]}`)
+      }
+      if ((match = trimmed.match(/^Leaderboard Attempt (\d+|—) \/ 3$/))) {
+        return source.replace(trimmed, `محاولة الترتيب ${match[1]} / 3`)
+      }
+      if ((match = trimmed.match(/^Leaderboard Attempt (\d+|—) \/ 3 Saved$/))) {
+        return source.replace(trimmed, `محاولة الترتيب ${match[1]} / 3 محفوظة`)
+      }
+      if ((match = trimmed.match(/^Leaderboard Attempt (\d+|—) \/ 3 Completed$/))) {
+        return source.replace(trimmed, `محاولة الترتيب ${match[1]} / 3 مكتملة`)
+      }
+      if ((match = trimmed.match(/^Use Skip \((\d+) left\)$/))) {
+        return source.replace(trimmed, `استخدم التخطّي (${match[1]} متبقي)`)
+      }
+      if ((match = trimmed.match(/^Pick (\d+) \/ 11/))) {
+        return source.replace("Pick", "الاختيار")
+      }
+      if ((match = trimmed.match(/^(\d+) clubs$/))) {
+        return source.replace(trimmed, `${match[1]} أندية`)
+      }
+      if ((match = trimmed.match(/^(\d+) goals$/))) {
+        return source.replace(trimmed, `${match[1]} هدف`)
+      }
+      if ((match = trimmed.match(/^(\d+) assists$/))) {
+        return source.replace(trimmed, `${match[1]} صناعة`)
+      }
+      if ((match = trimmed.match(/^(\d+) clean sheets$/))) {
+        return source.replace(trimmed, `${match[1]} شباك نظيفة`)
+      }
+      if ((match = trimmed.match(/^Matchday (\d+)(.*)$/))) {
+        return source.replace(trimmed, `الجولة ${match[1]}${match[2] || ""}`)
+      }
+      if ((match = trimmed.match(/^Your rank: #(\d+) of (\d+)$/))) {
+        return source.replace(trimmed, `ترتيبك: #${match[1]} من ${match[2]}`)
+      }
+      if ((match = trimmed.match(/^Your Daily rank: #(\d+) of (\d+)$/))) {
+        return source.replace(trimmed, `ترتيبك اليومي: #${match[1]} من ${match[2]}`)
+      }
+      if ((match = trimmed.match(/^Attempt (\d+) of (\d+)$/))) {
+        return source.replace(trimmed, `المحاولة ${match[1]} من ${match[2]}`)
+      }
+      if ((match = trimmed.match(/^(\d+) pts$/))) {
+        return source.replace(trimmed, `${match[1]} نقطة`)
+      }
+      if ((match = trimmed.match(/^(\d+) points$/))) {
+        return source.replace(trimmed, `${match[1]} نقطة`)
+      }
+      if ((match = trimmed.match(/^Finished (\d+)(st|nd|rd|th)$/))) {
+        return source.replace(trimmed, `أنهى الموسم في المركز ${match[1]}`)
+      }
+      if (trimmed === "Your draft") return source.replace(trimmed, "فريقك");
+      return source
+    }
+
+    function translateTextNode(node, mutationSource = false) {
+      if (
+        !node ||
+        node.nodeType !== Node.TEXT_NODE ||
+        !node.parentElement ||
+        node.parentElement.closest(
+          "script,style,[data-i18n-skip='true']"
+        )
+      ) return;
+
+      const current = node.nodeValue || "";
+      if (
+        mutationSource ||
+        typeof node.__splEnglishText !== "string"
+      ) {
+        if (
+          !mutationSource ||
+          current !== node.__splLocalizedText
+        ) {
+          node.__splEnglishText = current
+        }
+      }
+
+      const english =
+        typeof node.__splEnglishText === "string"
+          ? node.__splEnglishText
+          : current;
+      const next =
+        isArabicUi()
+          ? translatedExactText(english)
+          : english;
+
+      if (current !== next) {
+        node.__splLocalizedText = next;
+        node.nodeValue = next
+      } else {
+        node.__splLocalizedText = next
+      }
+    }
+
+    function translateElementAttributes(element, mutationSource = false) {
+      if (
+        !element ||
+        element.nodeType !== Node.ELEMENT_NODE ||
+        element.matches("[data-i18n-skip='true']")
+      ) return;
+
+      for (const attribute of ["placeholder", "title", "aria-label"]) {
+        if (!element.hasAttribute(attribute)) continue;
+        const property = `__splEnglish_${attribute}`;
+        const current = element.getAttribute(attribute) || "";
+        if (
+          mutationSource ||
+          typeof element[property] !== "string"
+        ) {
+          if (
+            !mutationSource ||
+            current !== element[`__splLocalized_${attribute}`]
+          ) {
+            element[property] = current
+          }
+        }
+        const english =
+          typeof element[property] === "string"
+            ? element[property]
+            : current;
+        const next =
+          isArabicUi()
+            ? translatedExactText(english)
+            : english;
+        element[`__splLocalized_${attribute}`] = next;
+        if (current !== next) element.setAttribute(attribute, next)
+      }
+    }
+
+    function translateUiTree(root = document.body, mutationSource = false) {
+      if (!root) return;
+      uiTranslationBusy = true;
+      try {
+        if (root.nodeType === Node.TEXT_NODE) {
+          translateTextNode(root, mutationSource)
+        } else if (root.nodeType === Node.ELEMENT_NODE) {
+          translateElementAttributes(root, mutationSource);
+          const walker = document.createTreeWalker(
+            root,
+            NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT
+          );
+          let node;
+          while ((node = walker.nextNode())) {
+            if (node.nodeType === Node.TEXT_NODE) {
+              translateTextNode(node, mutationSource)
+            } else {
+              translateElementAttributes(node, mutationSource)
+            }
+          }
+        }
+      } finally {
+        uiTranslationBusy = false
+      }
+    }
+
+    function refreshLocalizedGameViews() {
+      try {
+        if (gt && document.getElementById("pitch")) U();
+        if (Ct && document.getElementById("lgBody")) {
+          _();
+          tt()
+        }
+        if (
+          dailyPreview &&
+          document.getElementById("scr-daily").classList.contains("on")
+        ) {
+          renderDailyChallengePreview(dailyPreview)
+        }
+        if (
+          document.getElementById("scr-records").classList.contains("on")
+        ) {
+          renderRecordsScreen()
+        }
+        renderLocalizedSeasonExtremes();
+        renderLocalizedLeagueAwards();
+        renderStoredSeasonReview()
+      } catch (error) {
+        console.warn("Could not refresh one localized view.", error)
+      }
+    }
+
+    function applyUiLanguage() {
+      document.documentElement.lang = isArabicUi() ? "ar" : "en";
+      document.documentElement.dir = isArabicUi() ? "rtl" : "ltr";
+      document.title = isArabicUi()
+        ? "SPL Draft — الدوري السعودي"
+        : "SPL Draft — Saudi Pro League";
+
+      const button = document.getElementById("languageToggleBtn");
+      if (button) {
+        const flag = button.querySelector(".language-flag"),
+          label = button.querySelector(".language-label");
+        if (flag) flag.textContent = isArabicUi() ? "🇬🇧" : "🇸🇦";
+        if (label) label.textContent = isArabicUi() ? "English" : "عربي";
+        button.title = isArabicUi() ? "English" : "العربية";
+        button.setAttribute(
+          "aria-label",
+          isArabicUi()
+            ? "Switch game to English"
+            : "حوّل اللعبة للعربي"
+        )
+      }
+
+      const leaderboardButton =
+        document.getElementById("headerLeaderboardBtn");
+      if (leaderboardButton) {
+        leaderboardButton.title =
+          isArabicUi() ? "لوحات الصدارة" : "Leaderboards";
+        leaderboardButton.setAttribute(
+          "aria-label",
+          isArabicUi()
+            ? "افتح لوحات الصدارة"
+            : "Open leaderboards"
+        )
+      }
+
+      translateUiTree(document.body);
+      refreshLocalizedGameViews()
+    }
+
+    function setUiLanguage(language) {
+      uiLanguage = language === "en" ? "en" : "ar";
+      try {
+        localStorage.setItem(UI_LANGUAGE_KEY, uiLanguage)
+      } catch {}
+      applyUiLanguage()
+    }
+
+    const uiMutationObserver = new MutationObserver(mutations => {
+      if (uiTranslationBusy) return;
+      for (const mutation of mutations) {
+        if (mutation.type === "characterData") {
+          translateTextNode(mutation.target, true)
+        } else if (mutation.type === "attributes") {
+          translateElementAttributes(mutation.target, true)
+        } else {
+          for (const node of mutation.addedNodes) {
+            translateUiTree(node, true)
+          }
+        }
+      }
+    });
+
+    uiMutationObserver.observe(document.body, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["placeholder", "title", "aria-label"]
+    });
+
+
     let localProfile = loadLocalProfile(),
       onlineClient = null,
       onlineUser = null,
@@ -999,7 +1772,7 @@ function getDerivedAIStrength(clubId) {
       } else if ("skipped-practice" === submission.status) {
         note.textContent = "Daily Challenge practice attempts stay local and are not submitted to the global leaderboard."
       } else if ("skipped-alltime" === submission.status) {
-        note.textContent = "Max Rating All-Time is local-only and does not enter the global leaderboard."
+        note.textContent = "Max Rating All-Time does not enter the online leaderboards."
       } else if ("server-managed" === submission.status) {
         note.classList.add("ok");
         note.textContent = "This standard run is finalized and submitted only by the trusted server."
@@ -2628,6 +3401,7 @@ function getDerivedAIStrength(clubId) {
 
     function ordinal(value) {
       const n = +value || 0;
+      if (isArabicUi()) return String(n);
       const mod100 = n % 100;
       if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
       return `${n}${1 === n % 10 ? "st" : 2 === n % 10 ? "nd" : 3 === n % 10 ? "rd" : "th"}`
@@ -2636,7 +3410,7 @@ function getDerivedAIStrength(clubId) {
     function formatRunDate(value, includeTime = !1) {
       const date = new Date(value);
       if (Number.isNaN(date.getTime())) return "Unknown date";
-      return new Intl.DateTimeFormat(void 0, includeTime ? {
+      return new Intl.DateTimeFormat(isArabicUi() ? "ar-SA" : "en-GB", includeTime ? {
         year: "numeric",
         month: "short",
         day: "numeric",
@@ -2708,9 +3482,12 @@ function getDerivedAIStrength(clubId) {
       return gt && Array.isArray(gt.slots) ? gt.slots.filter(slot => slot.player).map(slot => ({
         playerId: slot.player.player_id,
         name: slot.player.name,
+        nameAr: slot.player.name_ar || slot.player.nameAr || "",
         club: slot.player.club,
+        clubAr: slot.player.club_ar || slot.player.clubAr || "",
         season: slot.player.season,
         position: slot.code,
+        positionAr: slot.player.position_ar || slot.player.positionAr || "",
         rating: +slot.player.rating
       })) : []
     }
@@ -3020,41 +3797,8 @@ function getDerivedAIStrength(clubId) {
       return result
     }
 
-    function runsForPeriod(period) {
-      const now = new Date(),
-        todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(),
-        tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime(),
-        weekStart = startOfLocalWeek(now).getTime(),
-        nextWeek = weekStart + 7 * 864e5,
-        monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime(),
-        nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
-      return localProfile.runHistory.filter(run => {
-        const time = new Date(run.completedAt).getTime();
-        if (!Number.isFinite(time)) return !1;
-        if ("today" === period) return time >= todayStart && time < tomorrowStart;
-        if ("week" === period) return time >= weekStart && time < nextWeek;
-        if ("month" === period) return time >= monthStart && time < nextMonth;
-        return !0
-      }).sort((a, b) => b.score - a.score || a.finalPosition - b.finalPosition || b.points - a.points || b.goalDifference - a.goalDifference || new Date(a.completedAt) - new Date(b.completedAt)).slice(0, 10)
-    }
-
-    function renderLocalLeaderboard() {
-      xt("leaderboardTabs").querySelectorAll("button").forEach(button => button.classList.toggle("sel", button.dataset.period === leaderboardPeriod));
-      const runs = runsForPeriod(leaderboardPeriod);
-      xt("leaderboardBody").innerHTML = runs.length ? runs.map((run, index) => `<tr>
-        <td>${index + 1}<\/td>
-        <td class="scorecell">${Math.round(run.score).toLocaleString()}<\/td>
-        <td>${escapeHtml(formatRunDate(run.completedAt))}<\/td>
-        <td>${"hard" === run.difficulty ? "Hard" : "Normal"}<\/td>
-        <td>${"alltime" === run.draftMode ? "All-Time" : "Season"}<\/td>
-        <td>${(+run.squadOverall).toFixed(1)}<\/td>
-        <td>${ordinal(run.finalPosition)}<\/td>
-        <td>${run.points}<\/td>
-        <td>${run.goalDifference > 0 ? "+" : ""}${run.goalDifference}<\/td>
-        <td>${run.isDailyChallenge ? '<span class="mini-badge">Daily<\/span>' : ""}<\/td>
-      <\/tr>`).join("") : '<tr><td colspan="10" class="empty">No completed runs in this period yet.<\/td><\/tr>'
-    }
-
+    
+    
     function renderAchievements() {
       xt("achievementsGrid").innerHTML = Object.entries(ACHIEVEMENT_DEFINITIONS).map(([id, definition]) => {
         const unlock = localProfile.achievements[id],
@@ -3087,21 +3831,38 @@ function getDerivedAIStrength(clubId) {
     }
 
     function renderRecentRuns() {
-      const runs = localProfile.runHistory.slice(0, 20);
-      xt("recentRuns").innerHTML = runs.length ? runs.map(run => `<details class="run-card">
+      const runs = localProfile.runHistory.slice(0, 10);
+      xt("recentRuns").innerHTML = runs.length ? runs.map(run => {
+        const scorerName =
+            localizedPlayerName(run.topScorer),
+          assisterName =
+            localizedPlayerName(run.topAssister),
+          bestName =
+            localizedPlayerName(run.bestPlayer),
+          difficulty =
+            "hard" === run.difficulty
+              ? (isArabicUi() ? "صعب" : "Hard")
+              : (isArabicUi() ? "عادي" : "Normal"),
+          mode =
+            "alltime" === run.draftMode
+              ? (isArabicUi() ? "أعلى تقييم تاريخي" : "Max Rating All-Time")
+              : (isArabicUi() ? "تقييم الموسم" : "Ratings by Season");
+
+        return `<details class="run-card">
         <summary>
-          <span><b>${Math.round(run.score).toLocaleString()} pts<\/b><small>${escapeHtml(formatRunDate(run.completedAt, !0))} · ${ordinal(run.finalPosition)} · ${(+run.squadOverall).toFixed(1)} OVR<\/small><\/span>
-          <span class="run-tags"><i>${"hard" === run.difficulty ? "Hard" : "Normal"}<\/i>${run.isDailyChallenge ? "<i>Daily<\/i>" : ""}<\/span>
+          <span><b>${Math.round(run.score).toLocaleString()} ${isArabicUi() ? "نقطة" : "pts"}<\/b><small>${escapeHtml(formatRunDate(run.completedAt, !0))} · ${isArabicUi() ? `المركز ${run.finalPosition}` : ordinal(run.finalPosition)} · ${(+run.squadOverall).toFixed(1)} OVR<\/small><\/span>
+          <span class="run-tags"><i>${difficulty}<\/i>${run.isDailyChallenge ? `<i>${isArabicUi() ? "يومي" : "Daily"}<\/i>` : ""}<\/span>
         <\/summary>
         <div class="run-details">
-          <div class="run-statline">${run.points} pts · ${run.wins}W ${run.draws}D ${run.losses}L · ${run.goalsFor}–${run.goalsAgainst} · GD ${run.goalDifference > 0 ? "+" : ""}${run.goalDifference}<\/div>
-          <div class="run-statline">${escapeHtml(run.formation)} · ${"alltime" === run.draftMode ? "Max Rating All-Time" : "Ratings by Season"}<\/div>
-          <div class="run-leaders">Top scorer: <b>${escapeHtml(run.topScorer && run.topScorer.name || "—")}<\/b> · Top assister: <b>${escapeHtml(run.topAssister && run.topAssister.name || "—")}<\/b> · Best player: <b>${escapeHtml(run.bestPlayer && run.bestPlayer.name || "—")}<\/b><\/div>
+          <div class="run-statline">${run.points} ${isArabicUi() ? "نقطة" : "pts"} · ${run.wins}${isArabicUi() ? " فوز" : "W"} ${run.draws}${isArabicUi() ? " تعادل" : "D"} ${run.losses}${isArabicUi() ? " خسارة" : "L"} · ${run.goalsFor}–${run.goalsAgainst} · ${isArabicUi() ? "الفارق" : "GD"} ${run.goalDifference > 0 ? "+" : ""}${run.goalDifference}<\/div>
+          <div class="run-statline">${escapeHtml(run.formation)} · ${mode}<\/div>
+          <div class="run-leaders">${isArabicUi() ? "الهداف" : "Top scorer"}: <b>${escapeHtml(scorerName)}<\/b> · ${isArabicUi() ? "الأكثر صناعة" : "Top assister"}: <b>${escapeHtml(assisterName)}<\/b> · ${isArabicUi() ? "أفضل لاعب" : "Best player"}: <b>${escapeHtml(bestName)}<\/b><\/div>
           ${runScoreBreakdownHtml(run)}
-          <div class="history-xi">${(run.draftedPlayers || []).map(player => `<span><b>${escapeHtml(player.position)} ${escapeHtml(player.name)}<\/b><small>${Math.round(player.rating)} · ${escapeHtml(player.club)} · ${escapeHtml(player.season)}<\/small><\/span>`).join("")}<\/div>
-          <button class="btn ghost sm copy-history-result" data-run-id="${escapeHtml(run.runId)}">Copy Result<\/button>
+          <div class="history-xi">${(run.draftedPlayers || []).map(player => `<span><b>${escapeHtml(localizedPositionName(player.positionAr ? {...player, position_ar: player.positionAr} : player.position))} ${escapeHtml(localizedPlayerName(player))}<\/b><small>${Math.round(player.rating)} · ${escapeHtml(localizedClubName(player.club, player.clubAr))} · ${escapeHtml(player.season)}<\/small><\/span>`).join("")}<\/div>
+          <button class="btn ghost sm copy-history-result" data-run-id="${escapeHtml(run.runId)}">${isArabicUi() ? "انسخ النتيجة" : "Copy Result"}<\/button>
         <\/div>
-      <\/details>`).join("") : '<div class="empty">No completed runs yet.<\/div>';
+      <\/details>`
+      }).join("") : `<div class="empty">${isArabicUi() ? "ما عندك محاولات مكتملة للحين." : "No completed runs yet."}<\/div>`;
       xt("recentRuns").querySelectorAll(".copy-history-result").forEach(button => button.addEventListener("click", () => {
         const run = localProfile.runHistory.find(item => item.runId === button.dataset.runId);
         run && copyRunResult(run)
@@ -3136,7 +3897,7 @@ function getDerivedAIStrength(clubId) {
           ["Average points", completed ? (totals.totalPoints / completed).toFixed(1) : "—"],
           ["Average run score", completed ? Math.round(totals.totalRunScore / completed).toLocaleString() : "—"],
           ["Most-used formation", topFormation ? `${topFormation[0]} (${topFormation[1]})` : "—"],
-          ["Most-drafted club", topClub ? `${topClub[0]} (${topClub[1]})` : "—"],
+          ["Most-drafted club", topClub ? `${localizedClubName(topClub[0])} (${topClub[1]})` : "—"],
           ["Most-drafted season", topSeason ? `${topSeason[0]} (${topSeason[1]})` : "—"],
           ["Most-drafted player", topPlayer ? `${topPlayerName} (${topPlayer[1]})` : "—"]
         ];
@@ -3146,18 +3907,29 @@ function getDerivedAIStrength(clubId) {
     function renderDailyHistory() {
       const entries = Object.entries(localProfile.dailyChallengeHistory).sort((a, b) => b[0].localeCompare(a[0]));
       xt("dailyHistory").innerHTML = entries.length ? entries.map(([dateKey, item]) => {
-        const result = item.officialResult;
+        const result = item.officialResult,
+          formation = localizedFormationName(item.formation || "—"),
+          difficulty = "hard" === item.difficulty
+            ? (isArabicUi() ? "صعب" : "Hard")
+            : (isArabicUi() ? "عادي" : "Normal"),
+          mode = "alltime" === item.draftMode
+            ? (isArabicUi() ? "أعلى تقييم تاريخي" : "All-Time")
+            : (isArabicUi() ? "تقييم الموسم" : "Season"),
+          resultMeta = result
+            ? isArabicUi()
+              ? `المركز ${result.finalPosition} · ${result.points} نقطة · تقييم ${(+result.squadOverall).toFixed(1)}`
+              : `${ordinal(result.finalPosition)} · ${result.points} pts · ${(+result.squadOverall).toFixed(1)} OVR`
+            : "";
         return `<div class="daily-history-row">
-          <div><b>${escapeHtml(dateKey)}<\/b><small>${escapeHtml(item.challengeId || "—")} · ${escapeHtml(item.formation || "—")} · ${"hard" === item.difficulty ? "Hard" : "Normal"} · ${"alltime" === item.draftMode ? "All-Time" : "Season"}<\/small><\/div>
-          <div>${result ? `<b>${Math.round(result.score).toLocaleString()}<\/b><small>${ordinal(result.finalPosition)} · ${result.points} pts · ${(+result.squadOverall).toFixed(1)} OVR<\/small>` : `<b>${"started" === item.status ? "Incomplete" : "Not completed"}<\/b><small>Official attempt<\/small>`}<\/div>
+          <div><b>${escapeHtml(dateKey)}<\/b><small>${escapeHtml(formation)} · ${difficulty} · ${mode}<\/small><\/div>
+          <div>${result ? `<b>${Math.round(result.score).toLocaleString(isArabicUi() ? "ar-SA" : undefined)}<\/b><small>${escapeHtml(resultMeta)}<\/small>` : `<b>${"started" === item.status ? (isArabicUi() ? "غير مكتملة" : "Incomplete") : (isArabicUi() ? "غير مكتملة" : "Not completed")}<\/b><small>${isArabicUi() ? "محاولة رسمية" : "Official attempt"}<\/small>`}<\/div>
         <\/div>`
-      }).join("") : '<div class="empty">No Daily Challenge attempts saved yet.<\/div>'
+      }).join("") : `<div class="empty">${isArabicUi() ? "ما عندك محاولات محفوظة لتحدي اليوم." : "No Daily Challenge attempts saved yet."}<\/div>`
     }
 
     function renderRecordsScreen() {
       if (!xt("personalRecordsGrid")) return;
       renderPersonalRecords();
-      renderLocalLeaderboard();
       renderAchievements();
       renderRecentRuns();
       renderCareerStatistics();
@@ -3167,7 +3939,16 @@ function getDerivedAIStrength(clubId) {
     }
 
     function buildShareText(run) {
-      const dailyHeader = run.isDailyChallenge ? `SPL DRAFT — DAILY CHALLENGE\nChallenge: ${run.challengeId || run.dailyChallengeDate || "—"}\n\n` : "SPL DRAFT\n\n";
+      if (isArabicUi()) {
+        const dailyHeader = run.isDailyChallenge
+          ? `SPL DRAFT — تحدي اليوم\nالتحدي: ${run.challengeId || run.dailyChallengeDate || "—"}\n\n`
+          : "SPL DRAFT\n\n";
+        return `${dailyHeader}${run.teamName || "فريقي"}\nالنقاط: ${Math.round(run.score).toLocaleString("ar-SA")}\nالمركز: ${run.finalPosition}\nنقاط الدوري: ${run.points}\nالسجل: ${run.wins} فوز · ${run.draws} تعادل · ${run.losses} خسارة\nالأهداف: ${run.goalsFor}–${run.goalsAgainst}\nتقييم التشكيلة: ${(+run.squadOverall).toFixed(1)}\nالصعوبة: ${"hard" === run.difficulty ? "صعب" : "عادي"}\nنمط الدرافت: ${"alltime" === run.draftMode ? "أعلى تقييم تاريخي" : "تقييم الموسم"}\nالخطة: ${localizedFormationName(run.formation)}\n\nتقدر تتجاوز نتيجتي؟`
+      }
+
+      const dailyHeader = run.isDailyChallenge
+        ? `SPL DRAFT — DAILY CHALLENGE\nChallenge: ${run.challengeId || run.dailyChallengeDate || "—"}\n\n`
+        : "SPL DRAFT\n\n";
       return `${dailyHeader}${run.teamName || "My Draft"}\nScore: ${Math.round(run.score).toLocaleString()}\nFinished: ${ordinal(run.finalPosition)}\nPoints: ${run.points}\nRecord: ${run.wins}W · ${run.draws}D · ${run.losses}L\nGoals: ${run.goalsFor}–${run.goalsAgainst}\nSquad Overall: ${(+run.squadOverall).toFixed(1)}\nMode: ${"hard" === run.difficulty ? "Hard" : "Normal"}\nDraft: ${"alltime" === run.draftMode ? "Max Rating All-Time" : "Ratings by Season"}\nFormation: ${run.formation}\n\nCan you beat my score?`
     }
 
@@ -3198,64 +3979,8 @@ function getDerivedAIStrength(clubId) {
       return copyText(buildShareText(run))
     }
 
-    function exportLocalProfile() {
-      const blob = new Blob([JSON.stringify(localProfile, null, 2)], {
-          type: "application/json"
-        }),
-        url = URL.createObjectURL(blob),
-        link = document.createElement("a");
-      link.href = url;
-      link.download = `spl-draft-records-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      l("Local records exported.")
-    }
-
-    function importLocalProfileFile(file) {
-      if (!file) return;
-      if (
-        Number.isFinite(+file.size) &&
-        +file.size > MAX_PROFILE_IMPORT_BYTES
-      ) {
-        l("That backup is too large. Maximum size is 1 MB.");
-        xt("importRecordsFile").value = "";
-        return
-      }
-      const reader = new FileReader;
-      reader.onload = () => {
-        try {
-          const parsed = JSON.parse(String(reader.result || ""));
-          if (
-            !parsed ||
-            "object" !== typeof parsed ||
-            Array.isArray(parsed) ||
-            !("version" in parsed) ||
-            !Array.isArray(parsed.runHistory) ||
-            !parsed.totals ||
-            parsed.runHistory.length > RUN_HISTORY_LIMIT
-          ) throw new Error("Unsupported profile backup");
-          const normalized =
-            normalizeLocalProfile(parsed);
-          m("Import local records?", "This replaces the records currently saved in this browser.", "Import Records", () => {
-            localProfile = normalized;
-            Nt.teamName = localProfile.teamName || Nt.teamName;
-            xt("teamNameInput").value = Nt.teamName;
-            saveLocalProfile();
-            renderRecordsScreen();
-            l("Local records imported.")
-          }, xt("importRecordsBtn"))
-        } catch (error) {
-          console.warn("Invalid profile import.", error);
-          l("That file is not a valid SPL Draft records backup.")
-        } finally {
-          xt("importRecordsFile").value = ""
-        }
-      };
-      reader.readAsText(file)
-    }
-
+    
+    
     function fnv1aHash(text) {
       let hash = 2166136261;
       for (let index = 0; index < text.length; index++) {
@@ -3328,9 +4053,8 @@ function buildDailyChallenge() {
         `Daily Challenge — ${formatRunDate(`${preview.dateKey}T12:00:00Z`)}`;
 
       xt("dailySettings").innerHTML =
-        `<div><span>Challenge ID<\/span><b>${escapeHtml(preview.challengeId)}<\/b><\/div>
-        <div><span>Formation<\/span><b>${escapeHtml(preview.formation)}<\/b><\/div>
-        <div><span>Difficulty<\/span><b>${"hard" === preview.difficulty ? "Hard Mode — No Skips" : "Normal Mode — 2 Skips"}<\/b><\/div>
+        `<div><span>Formation<\/span><b>${escapeHtml(preview.formation)}<\/b><\/div>
+        <div><span>Difficulty<\/span><b>Hard — No Skips<\/b><\/div>
         <div><span>Draft mode<\/span><b>${"alltime" === preview.mode ? "Max Rating All-Time" : "Ratings by Season"}<\/b><\/div>
         <div><span>Leaderboard attempts left<\/span><b>${Math.max(0, +(preview.leaderboardAttemptsLeft ?? 3))} / ${+(preview.attemptsAllowed || 3)}<\/b><\/div>`;
 
@@ -4065,9 +4789,9 @@ function getDailyCurrentChoice() {
     const Nt = {
         teamName: localProfile.teamName || ""
       },
-      Jt = () => Nt.teamName || "Your Draft",
+      Jt = () => Nt.teamName || (isArabicUi() ? "فريقك" : "Your Draft"),
       Tt = {
-        skips: null,
+        skips: 2,
         mode: "season",
         fkey: null
       };
@@ -4129,7 +4853,19 @@ function getDailyCurrentChoice() {
     }
 
     function i() {
-      Tt.skips = null, xt("diffRow").querySelectorAll(".modecard").forEach(t => t.classList.remove("sel")), Tt.mode = "season", xt("modeRow").querySelectorAll(".modecard").forEach(t => t.classList.toggle("sel", "season" === t.dataset.v)), Tt.fkey = null, xt("fgrid").querySelectorAll(".fcard").forEach(t => t.classList.remove("sel")), e()
+      Tt.skips = 2;
+      xt("diffRow").querySelectorAll(".modecard").forEach(t =>
+        t.classList.toggle("sel", "2" === t.dataset.v)
+      );
+      Tt.mode = "season";
+      xt("modeRow").querySelectorAll(".modecard").forEach(t =>
+        t.classList.toggle("sel", "season" === t.dataset.v)
+      );
+      Tt.fkey = null;
+      xt("fgrid").querySelectorAll(".fcard").forEach(t =>
+        t.classList.remove("sel")
+      );
+      e()
     }
 
     function b() {
@@ -4431,7 +5167,7 @@ function V() {
     }
 
     function Z(t) {
-      return `<span class="cd" style="background:${(rt[t]||{}).color||"#888"}"><\/span>${escapeHtml(t)}`
+      return `<span class="cd" style="background:${(rt[t]||{}).color||"#888"}"><\/span>${escapeHtml(localizedClubName(t))}`
     }
 
     function u(t) {
@@ -4569,13 +5305,19 @@ function V() {
 
         xt("rosterPanel").style.display = "block";
         xt("clubDot").style.background = clubStyle.color;
-        xt("clubName").textContent = ot(selectedPool.club);
+        xt("clubName").textContent =
+          localizedClubName(
+            ot(selectedPool.club),
+            selectedPool.sourceClubAr || ""
+          );
         xt("clubSeason").textContent =
           "alltime" === gt.mode
-            ? selectedPool.season + " · PEAK CARDS"
+            ? selectedPool.season + (isArabicUi() ? " · أفضل البطاقات" : " · PEAK CARDS")
             : selectedPool.season;
         xt("clubNameAr").textContent =
-          selectedPool.sourceClubAr || "";
+          isArabicUi()
+            ? ot(selectedPool.club)
+            : selectedPool.sourceClubAr || "";
 
         D();
 
@@ -5773,14 +6515,19 @@ function z(t) {
     }
 
     function k(t) {
-      const s = t.eligible_slots[0];
-      if ("GK" === s) return `${lt(t.clean_sheets)} CS \xb7 ${lt(t.goals_conceded)} GC \xb7 ${lt(t.apps)} apps`;
-      if (Ht.has(s)) {
-        const s = lt(t.clean_sheets),
-          a = lt(t.goals_conceded);
-        return `${""!==t.clean_sheets||""!==t.goals_conceded?`${s} CS \xb7 ${a} GC \xb7 `:""}${lt(t.goals)} G \xb7 ${lt(t.assists)} A \xb7 ${lt(t.apps)} apps`
+      const slot = t.eligible_slots[0],
+        labels = isArabicUi()
+          ? { cs: "شباك نظيفة", gc: "هدف عليه", g: "هدف", a: "صناعة", apps: "مباراة" }
+          : { cs: "CS", gc: "GC", g: "G", a: "A", apps: "apps" };
+      if ("GK" === slot) {
+        return `${lt(t.clean_sheets)} ${labels.cs} \xb7 ${lt(t.goals_conceded)} ${labels.gc} \xb7 ${lt(t.apps)} ${labels.apps}`
       }
-      return `${lt(t.goals)} G \xb7 ${lt(t.assists)} A \xb7 ${lt(t.apps)} apps`
+      if (Ht.has(slot)) {
+        const cleanSheets = lt(t.clean_sheets),
+          conceded = lt(t.goals_conceded);
+        return `${"" !== t.clean_sheets || "" !== t.goals_conceded ? `${cleanSheets} ${labels.cs} \xb7 ${conceded} ${labels.gc} \xb7 ` : ""}${lt(t.goals)} ${labels.g} \xb7 ${lt(t.assists)} ${labels.a} \xb7 ${lt(t.apps)} ${labels.apps}`
+      }
+      return `${lt(t.goals)} ${labels.g} \xb7 ${lt(t.assists)} ${labels.a} \xb7 ${lt(t.apps)} ${labels.apps}`
     }
 
     function D() {
@@ -5809,8 +6556,14 @@ function z(t) {
         const s = document.createElement("button");
         s.className = "pcard";
         const n = t.eligible_slots.map(slot => `<span class="chip ${[...e].some(code=>Dt[code].includes(slot))?"":"dim"}">${escapeHtml(slot)}<\/span>`).join(""),
-          l = "alltime" === gt.mode ? `peak ${t.season}${ot(t.club)!==ot(gt.roll.club)?" at "+ot(t.club):""}` : `${t.club} \xb7 ${t.season}`;
-        s.innerHTML = `\n      <div class="rt">${Math.round(t.rating)}<small>OVR<\/small><\/div>\n      <div class="who"><b>${escapeHtml(t.name)}<\/b><span class="ar">${escapeHtml(t.name_ar||"")}<\/span>\n        <div class="meta">${escapeHtml(t.position)} \xb7 ${escapeHtml(l)}<br>${escapeHtml(k(t))}<\/div><\/div>\n      <div class="slots">${n}<\/div>`, s.addEventListener("click", () => w(t)), a.appendChild(s)
+          l = "alltime" === gt.mode
+            ? `${isArabicUi() ? "القمة" : "peak"} ${t.season}${
+                ot(t.club) !== ot(gt.roll.club)
+                  ? `${isArabicUi() ? " مع " : " at "}${localizedClubName(ot(t.club), t.club_ar)}`
+                  : ""
+              }`
+            : `${localizedClubName(t.club, t.club_ar)} \xb7 ${t.season}`;
+        s.innerHTML = `\n      <div class="rt">${Math.round(t.rating)}<small>OVR<\/small><\/div>\n      <div class="who"><b>${escapeHtml(localizedPlayerName(t))}<\/b><span class="ar">${escapeHtml(isArabicUi() ? t.name : t.name_ar || "")}<\/span>\n        <div class="meta">${escapeHtml(localizedPositionName(t))} \xb7 ${escapeHtml(l)}<br>${escapeHtml(k(t))}<\/div><\/div>\n      <div class="slots">${n}<\/div>`, s.addEventListener("click", () => w(t)), a.appendChild(s)
       }
     }
 
@@ -5845,7 +6598,7 @@ function z(t) {
       if (1 === s.length) return void S(t, s[0].idx);
       gt.pendingPlayer = t, X(!1);
       const a = Y(s);
-      xt("rosterZone").innerHTML = `\n    <div class="slotchoice">\n      <div class="who">Where should <b>${escapeHtml(t.name)}<\/b> play?<\/div>\n      <div class="scbtns">${s.map(slot=>`<button data-idx="${slot.idx}">${escapeHtml(a.get(slot.idx))}<\/button>`).join("")}<\/div>\n      <button class="linkish" id="scCancel">choose a different player<\/button>\n    <\/div>`, xt("rosterZone").querySelectorAll(".scbtns button").forEach(t => {
+      xt("rosterZone").innerHTML = `\n    <div class="slotchoice">\n      <div class="who">Where should <b>${escapeHtml(localizedPlayerName(t))}<\/b> play?<\/div>\n      <div class="scbtns">${s.map(slot=>`<button data-idx="${slot.idx}">${escapeHtml(a.get(slot.idx))}<\/button>`).join("")}<\/div>\n      <button class="linkish" id="scCancel">choose a different player<\/button>\n    <\/div>`, xt("rosterZone").querySelectorAll(".scbtns button").forEach(t => {
         t.addEventListener("click", () => S(gt.pendingPlayer, +t.dataset.idx))
       }), xt("scCancel").addEventListener("click", () => {
         gt.pendingPlayer = null, D(), X(gt.skipsLeft > 0)
@@ -5886,7 +6639,7 @@ function S(t, s) {
           for (const e of s) {
             const s = document.createElement("div");
             if (s.className = "slot" + (e.player ? " filled" : ""), s.style.left = e.x + "%", s.style.top = e.y + "%", e.player) {
-              const n = e.player.name.split(" ").slice(-1)[0];
+              const n = localizedPlayerName(e.player).split(" ").slice(-1)[0];
               if (s.innerHTML = `<div class="disc">${Math.round(e.player.rating)}<\/div>\n        <div class="nm">${escapeHtml(n)}<small>${escapeHtml(e.code)}${"pitch"===t.id?" \xb7 "+escapeHtml(e.player.season):""}<\/small><\/div>`, a) {
                 const t = s.querySelector(".disc");
                 t.setAttribute("tabindex", "0"), t.addEventListener("click", () => j(e.idx)), t.addEventListener("keydown", t => {
@@ -5916,9 +6669,9 @@ function S(t, s) {
         html: `Move to <b>${escapeHtml(e.get(l.idx))}<\/b>`
       }) : l.player && f(a, l.code) && f(l.player, s.code) && n.push({
         t: l,
-        html: `Swap with <b>${escapeHtml(l.player.name)}<\/b> (${escapeHtml(e.get(l.idx))})`
+        html: `Swap with <b>${escapeHtml(localizedPlayerName(l.player))}<\/b> (${escapeHtml(e.get(l.idx))})`
       }));
-      xt("swapSub").textContent = `${a.name} \u2014 currently ${e.get(t)}. Only legal moves are shown.`;
+      xt("swapSub").textContent = `${localizedPlayerName(a)} \u2014 currently ${e.get(t)}. Only legal moves are shown.`;
       const l = xt("swapList");
       l.innerHTML = n.length ? "" : '<div class="empty">No legal moves or swaps for this player right now.<\/div>';
       for (const t of n) {
@@ -6161,14 +6914,28 @@ function S(t, s) {
       K(), r("sumModal"), xt("openSummaryBtn").style.display = "none", F();
       let t = 10;
       const s = It;
-      xt("startSimBtn").textContent = `Kick-off in ${t}\u2026`, Bt = setInterval(() => {
-        s === It ? (t--, t <= 0 ? (F(), startSeasonFlow()) : xt("startSimBtn").textContent = `Kick-off in ${t}\u2026`) : F()
+      xt("startSimBtn").textContent = isArabicUi() ? `تبدأ المباريات خلال ${t}\u2026` : `Kick-off in ${t}\u2026`, Bt = setInterval(() => {
+        s === It ? (t--, t <= 0 ? (F(), startSeasonFlow()) : xt("startSimBtn").textContent = isArabicUi() ? `تبدأ المباريات خلال ${t}\u2026` : `Kick-off in ${t}\u2026`) : F()
       }, 1e3)
     }
 
     function K() {
       const t = G();
-      xt("sumSub").textContent = `${Xt[gt.fkey].name} \xb7 ${"alltime"===gt.mode?"Max Rating All-Time":"Ratings by Season"}${t.chem?" \xb7 full-chemistry bonus applied":""}`, xt("gOvr").textContent = t.ovr.toFixed(1), xt("gDef").textContent = t.def.toFixed(1), xt("gMid").textContent = t.mid.toFixed(1), xt("gAtt").textContent = t.att.toFixed(1), xt("gBest").textContent = `${t.best.player.name} (${Math.round(t.best.player.rating)})`, xt("gClubs").textContent = `${new Set(gt.slots.map(t=>t.player.club)).size} clubs`, Qt = function() {
+      xt("sumSub").textContent =
+        `${localizedFormationName(Xt[gt.fkey].name)} \xb7 ${
+          "alltime" === gt.mode
+            ? (isArabicUi() ? "أعلى تقييم تاريخي" : "Max Rating All-Time")
+            : (isArabicUi() ? "تقييم الموسم" : "Ratings by Season")
+        }${t.chem ? (isArabicUi() ? " \xb7 تم تطبيق تناغم كامل" : " \xb7 full-chemistry bonus applied") : ""}`;
+      xt("gOvr").textContent = t.ovr.toFixed(1);
+      xt("gDef").textContent = t.def.toFixed(1);
+      xt("gMid").textContent = t.mid.toFixed(1);
+      xt("gAtt").textContent = t.att.toFixed(1);
+      xt("gBest").textContent = `${localizedPlayerName(t.best.player)} (${Math.round(t.best.player.rating)})`;
+      xt("gClubs").textContent = isArabicUi()
+        ? `${new Set(gt.slots.map(slot => slot.player.club)).size} أندية`
+        : `${new Set(gt.slots.map(slot => slot.player.club)).size} clubs`;
+      Qt = function() {
         const t = x(),
           s = [];
         for (let a = 0; a < 150; a++) s.push(O(t));
@@ -6185,8 +6952,48 @@ function S(t, s) {
         }
       }();
       const s = Qt.probs,
-        a = (t, s) => `<div class="prob"><span>${t}<\/span><span class="bar"><i style="width:${Math.min(99,Math.max(2,Math.round(100*s)))}%"><\/i><\/span><span class="pc">${(t=>t<.01?"<1%":Math.min(99,Math.max(1,Math.round(100*t)))+"%")(s)}<\/span><\/div>`;
-      xt("probs").innerHTML = '<div class="opt-label">Expected league finish<\/div>' + a("Champion", s.champ) + a("Top 3", s.top3) + a("Top 5", s.top5) + a("Mid-table", s.mid) + a("Relegation battle", s.rel)
+        displayOverall = t.displayOverall,
+        perfectSeasonChance =
+          displayOverall >= 90
+            ? .80
+            : displayOverall >= 89
+              ? .50
+              : displayOverall >= 88
+                ? .25
+                : 0;
+
+      if (displayOverall >= 89) {
+        s.champ = 1;
+        s.top3 = 1;
+        s.top5 = 1;
+        s.mid = 0;
+        s.rel = 0
+      } else if (displayOverall >= 87) {
+        s.top3 = 1;
+        s.top5 = 1;
+        s.mid = 0;
+        s.rel = 0
+      }
+
+      const a = (label, probability) =>
+        `<div class="prob"><span>${label}<\/span><span class="bar"><i style="width:${Math.min(100,Math.max(2,Math.round(100*probability)))}%"><\/i><\/span><span class="pc">${
+          probability >= 1
+            ? "100%"
+            : probability < .01
+              ? "<1%"
+              : `${Math.min(99,Math.max(1,Math.round(100*probability)))}%`
+        }<\/span><\/div>`;
+
+      xt("probs").innerHTML =
+        '<div class="opt-label">Expected league finish<\/div>' +
+        a("Champion", s.champ) +
+        a("Top 3", s.top3) +
+        a("Top 5", s.top5) +
+        a("Mid-table", s.mid) +
+        a("Relegation battle", s.rel) +
+        (perfectSeasonChance
+          ? a("Perfect 34–0 season", perfectSeasonChance)
+          : "")
     }
     let Ct = null;
 
@@ -6218,7 +7025,7 @@ function S(t, s) {
 
     function Q(t) {
       return normalizePlainText(
-        t === Lt ? Jt() : t,
+        t === Lt ? Jt() : localizedClubName(t),
         100
       )
     }
@@ -6341,7 +7148,14 @@ function S(t, s) {
         normalizePlayer = player => ({
           name:
             normalizePlainText(
-              player && player.name || "—",
+              isArabicUi() && player && player.nameAr
+                ? player.nameAr
+                : player && player.name || "—",
+              100
+            ),
+          nameAr:
+            normalizePlainText(
+              player && player.nameAr || "",
               100
             ),
           club:
@@ -6358,7 +7172,14 @@ function S(t, s) {
         normalizeGlove = player => ({
           name:
             normalizePlainText(
-              player && player.name || "—",
+              isArabicUi() && player && player.nameAr
+                ? player.nameAr
+                : player && player.name || "—",
+              100
+            ),
+          nameAr:
+            normalizePlainText(
+              player && player.nameAr || "",
               100
             ),
           club:
@@ -6486,10 +7307,18 @@ function S(t, s) {
         )
         .map(item => {
           const extras = [
-            item.g ? `${safeInteger(item.g,0,0,100)}G` : "",
-            item.a ? `${safeInteger(item.a,0,0,100)}A` : "",
-            item.cs ? "CS" : "",
-            item.motm ? "MOTM" : ""
+            item.g
+              ? `${safeInteger(item.g,0,0,100)}${isArabicUi() ? " هدف" : "G"}`
+              : "",
+            item.a
+              ? `${safeInteger(item.a,0,0,100)}${isArabicUi() ? " صناعة" : "A"}`
+              : "",
+            item.cs
+              ? (isArabicUi() ? "شباك نظيفة" : "CS")
+              : "",
+            item.motm
+              ? (isArabicUi() ? "رجل المباراة" : "MOTM")
+              : ""
           ].filter(Boolean);
 
           return `<span class="mrat ${
@@ -6499,10 +7328,10 @@ function S(t, s) {
                 ? "bad"
                 : ""
           }">${
-            escapeHtml(item.s.code)
+            escapeHtml(localizedPositionName(item.s.code))
           } ${
             escapeHtml(
-              item.s.player.name
+              localizedPlayerName(item.s.player)
                 .split(" ")
                 .slice(-1)[0]
             )
@@ -6523,11 +7352,6 @@ function S(t, s) {
         serverActionPending: !1,
         serverFinalResult:
           state && state.result || null,
-        replaced:
-          normalizePlainText(
-            state && state.replacedClub || "—",
-            100
-          ),
         eff: x(),
         fixtures: null,
         plannedResults: Array(34),
@@ -6565,7 +7389,6 @@ function S(t, s) {
 
       applyTrustedPlayerStatsState(state);
 
-      xt("replacedClub").textContent = Ct.replaced;
       xt("mdNow").textContent = String(Ct.md);
       xt("seasonYou").textContent = Jt();
       xt("feed").innerHTML = "";
@@ -7106,7 +7929,18 @@ Ct.myMatches.push({
             e = t[a - 1],
             n = 1 === a,
             l = 1 === a ? "st" : 2 === a ? "nd" : 3 === a ? "rd" : "th";
-          xt("finalTitle").textContent = n ? `CHAMPIONS! ${Jt()} won the league` : `${Jt()} finished ${a}${l}`, xt("finalNote").textContent = `${e.pts} pts \xb7 34 played \xb7 ${e.w}W ${e.d}D ${e.l}L \xb7 ${e.gf} scored, ${e.ga} conceded \xb7 GD ${e.gd>0?"+":""}${e.gd}`, xt("latestPanel").style.display = "none", xt("finalBand").classList.add("on");
+          xt("finalTitle").textContent = isArabicUi()
+            ? n
+              ? `أبطال الدوري! ${Jt()} توّج باللقب`
+              : `${Jt()} أنهى الموسم في المركز ${a}`
+            : n
+              ? `CHAMPIONS! ${Jt()} won the league`
+              : `${Jt()} finished ${a}${l}`;
+          xt("finalNote").textContent = isArabicUi()
+            ? `${e.pts} نقطة \xb7 34 مباراة \xb7 ${e.w} فوز ${e.d} تعادل ${e.l} خسارة \xb7 سجل ${e.gf} واستقبل ${e.ga} \xb7 الفارق ${e.gd>0?"+":""}${e.gd}`
+            : `${e.pts} pts \xb7 34 played \xb7 ${e.w}W ${e.d}D ${e.l}L \xb7 ${e.gf} scored, ${e.ga} conceded \xb7 GD ${e.gd>0?"+":""}${e.gd}`;
+          xt("latestPanel").style.display = "none";
+          xt("finalBand").classList.add("on");
           const r = xt("feed").querySelector(".md");
           r && r.classList.add("open");
           const d = s();
@@ -7121,19 +7955,8 @@ Ct.myMatches.push({
             i = Ct.myMatches.filter(t => t.gf < t.ga).sort((t, s) => s.ga - s.gf - (t.ga - t.gf) || s.ga - t.ga),
             b = o[0],
             c = i[0];
-          xt("bigWin").textContent = b ? `${b.gf}\u2013${b.ga} vs ${b.opp} (${b.home?"home":"away"}, MD ${b.md})` : "No wins this season.", xt("bigLoss").textContent = c ? `${c.gf}\u2013${c.ga} vs ${c.opp} (${c.home?"home":"away"}, MD ${c.md})` : "Unbeaten all season.";
-      const m =
-          trustedLeagueAwards(),
-        W = t =>
-          ` — ${t.mine ? Jt().toUpperCase() : Q(t.club)}`;
-
-      xt("awards").innerHTML = m
-        ? `
-<div class="award"><div class="t">Top goal scorer<\/div><b>${escapeHtml(m.topScorer.name)}<\/b><span>${m.topScorer.g} goals${escapeHtml(W(m.topScorer))}<\/span><\/div>
-<div class="award"><div class="t">Top assister<\/div><b>${escapeHtml(m.topAssister.name)}<\/b><span>${m.topAssister.a} assists${escapeHtml(W(m.topAssister))}<\/span><\/div>
-<div class="award"><div class="t">Golden Glove<\/div><b>${escapeHtml(m.glove.name)}<\/b><span>${m.glove.cs} clean sheets — ${escapeHtml(m.glove.mine ? Jt().toUpperCase() : Q(m.glove.club))}<\/span><\/div>
-<div class="award"><div class="t">Best player<\/div><b>${escapeHtml(m.best.name)}<\/b><span>${m.best.g} G · ${m.best.a} A${escapeHtml(W(m.best))}<\/span><\/div>`
-        : '<div class="empty">Trusted league awards are temporarily unavailable. No local awards were generated.<\/div>';
+          renderLocalizedSeasonExtremes();
+      renderLocalizedLeagueAwards();
           const f = gt.slots.map(t => ({
               s: t,
               st: Ct.pstats[t.player.card_id]
@@ -7153,11 +7976,10 @@ Ct.myMatches.push({
                 bestAvg: o,
                 bw: i,
                 bl: b,
-                replaced: c,
                 form: m
               } = t, W = 1 === s ? "st" : 2 === s ? "nd" : 3 === s ? "rd" : "th", f = s <= l - 1, h = s >= l + 2;
               let v, p, y, L, V;
-              n ? (v = At(["FROM DRAFT BOARD TO CHAMPIONS", "THE DRAFT XI THAT CONQUERED THE LEAGUE", "TITLE GLORY FOR THE UPSTARTS"]), p = `Nobody hands out trophies in the draft room, but somebody forgot to tell this team. Slotted into the Saudi Pro League in place of ${c}, a squad assembled from a roulette wheel finished the job the traditional powers could not, lifting the title with ${a} points from a ${e} campaign.`) : f ? (v = At(["THE OVERACHIEVERS OF THE SPL", "A SEASON THAT DEFIED THE ODDS", "PUNCHING ABOVE THEIR WEIGHT"]), p = `Pre-season projections had this draft side pegged for around ${l}${1===l?"st":2===l?"nd":3===l?"rd":"th"} place. They finished ${s}${W}. Taking the league slot vacated by ${c}, the ${m} outfit turned a patchwork of roulette picks into one of the stories of the season, closing on ${a} points.`) : h ? (v = At(["A SEASON OF WHAT-IFS", "THE DRAFT THAT NEVER CLICKED", "FALLING SHORT OF THE BILLING"]), p = `On paper this was a squad built for better. In practice, a ${s}${W}-place finish on ${a} points told the story of a season that never found its rhythm. Handed ${c}'s place in the league, the draft side was projected around ${l}${l<=3?["st","nd","rd"][l-1]:"th"} \u2014 and fell well short of it.`) : (v = At(["A SOLID FIRST CAMPAIGN", "STEADY, IF NOT SPECTACULAR", "THE SEASON IN REVIEW"]), p = `A ${s}${W}-place finish with ${a} points is roughly what the numbers promised, and roughly what this draft side delivered. Stepping into the league in place of ${c}, they were competitive from August to May without ever quite threatening the ceiling above them.`);
+              n ? (v = At(["FROM DRAFT BOARD TO CHAMPIONS", "THE DRAFT XI THAT CONQUERED THE LEAGUE", "TITLE GLORY FOR THE UPSTARTS"]), p = `Nobody hands out trophies in the draft room, but somebody forgot to tell this team. A squad assembled from the roulette wheel finished the job the traditional powers could not, lifting the title with ${a} points from a ${e} campaign.`) : f ? (v = At(["THE OVERACHIEVERS OF THE SPL", "A SEASON THAT DEFIED THE ODDS", "PUNCHING ABOVE THEIR WEIGHT"]), p = `Pre-season projections had this draft side pegged for around ${l}${1===l?"st":2===l?"nd":3===l?"rd":"th"} place. They finished ${s}${W}. The ${m} outfit turned a patchwork of roulette picks into one of the stories of the season, closing on ${a} points.`) : h ? (v = At(["A SEASON OF WHAT-IFS", "THE DRAFT THAT NEVER CLICKED", "FALLING SHORT OF THE BILLING"]), p = `On paper this was a squad built for better. In practice, a ${s}${W}-place finish on ${a} points told the story of a season that never found its rhythm. The draft side was projected around ${l}${l<=3?["st","nd","rd"][l-1]:"th"} \u2014 and fell well short of it.`) : (v = At(["A SOLID FIRST CAMPAIGN", "STEADY, IF NOT SPECTACULAR", "THE SEASON IN REVIEW"]), p = `A ${s}${W}-place finish with ${a} points is roughly what the numbers promised, and roughly what this draft side delivered. They were competitive from August to May without ever quite threatening the ceiling above them.`);
               const q = i ? `The campaign's high-water mark came in the ${i.gf}\u2013${i.ga} ${i.home?"home win over":"away win at"} ${i.opp}, a result that showed exactly what this XI looks like when it clicks.` : "There was no high point worth the name \u2014 34 matchdays came and went without a single victory.",
                 Z = b ? `${i?"The low point was harder to watch":"The nadir"}: a ${b.gf}\u2013${b.ga} ${b.home?"home defeat to":"defeat away at"} ${b.opp} that ${n?"stood out as a rare blemish":"summed up the rougher stretches"}.` : "Remarkably, they went the entire season unbeaten.";
               return y = `${q} ${Z} Across 34 matchdays the record read ${e}, with ${t.gf} scored and ${t.ga} conceded.`, L = `Individually, ${r.name} carried the attack with ${r.g} league goals, while ${d.name} was the creative engine with ${d.a} assists. ${o.name} quietly graded out as the squad's most consistent performer at ${o.avg} per match${t.cs?`, and ${t.cs} clean sheets gave the side a platform to build on`:""}.`, V = At(n ? ["Champions in year one. Whatever the roulette gives this team next season, the rest of the league has been warned.", "A title in the debut campaign rewrites every expectation. Next season, they will be the hunted."] : h ? ["The talent is there; the consistency was not. Another season like this and the questions will get louder.", "The draft gave them the tools. The table says they did not use them. Next season needs to look very different."] : ["The foundation is real. With a sharper edge in the final third, the top of the table is not out of reach.", "Build on this, and next season's projections will make far better reading."]), {
@@ -7187,9 +8009,51 @@ Ct.myMatches.push({
               },
               bw: b,
               bl: c,
-              replaced: Ct.replaced,
               form: Xt[gt.fkey].name
             });
+          lastSeasonReviewData = {
+            english: y,
+            teamName: Jt(),
+            position: a,
+            expected: Qt ? Qt.medianPos : 5,
+            champion: n,
+            points: e.pts,
+            wins: e.w,
+            draws: e.d,
+            losses: e.l,
+            goalsFor: e.gf,
+            goalsAgainst: e.ga,
+            cleanSheets: Ct.table[Lt].cs,
+            topScorer: {
+              name: h.s.player.name,
+              nameAr: h.s.player.name_ar || h.s.player.nameAr || "",
+              goals: h.st.g
+            },
+            topAssister: {
+              name: v.s.player.name,
+              nameAr: v.s.player.name_ar || v.s.player.nameAr || "",
+              assists: v.st.a
+            },
+            bestPlayer: {
+              name: p.s.player.name,
+              nameAr: p.s.player.name_ar || p.s.player.nameAr || "",
+              averageRating: (p.st.rsum / p.st.apps).toFixed(1)
+            },
+            biggestWin: b ? {
+              gf: b.gf,
+              ga: b.ga,
+              opp: b.opp,
+              home: b.home,
+              md: b.md
+            } : null,
+            biggestLoss: c ? {
+              gf: c.gf,
+              ga: c.ga,
+              opp: c.opp,
+              home: c.home,
+              md: c.md
+            } : null
+          };
           const completedStrength = G(),
             completedRunData = {
               runId: gt.runId,
@@ -7217,14 +8081,17 @@ Ct.myMatches.push({
               challengeId: gt.challenge && gt.challenge.challengeId || null,
               topScorer: {
                 name: h.s.player.name,
+                nameAr: h.s.player.name_ar || h.s.player.nameAr || "",
                 goals: h.st.g
               },
               topAssister: {
                 name: v.s.player.name,
+                nameAr: v.s.player.name_ar || v.s.player.nameAr || "",
                 assists: v.st.a
               },
               bestPlayer: {
                 name: p.s.player.name,
+                nameAr: p.s.player.name_ar || p.s.player.nameAr || "",
                 averageRating: +(p.st.rsum / p.st.apps).toFixed(1)
               },
               cleanSheets: Ct.table[Lt].cs,
@@ -7233,11 +8100,188 @@ Ct.myMatches.push({
             saveMeta = saveRunResult(completedRunData);
           Ct.savedRun = saveMeta.run || completedRunData;
           renderFinalScorePanel(Ct.savedRun, saveMeta);
-          xt("article").innerHTML = `<h3>${escapeHtml(y.head)}<\/h3><div class="byline">Season review · SPL 25/26 · Draft XI<\/div>` + y.paras.map(t => `<p>${escapeHtml(t)}<\/p>`).join("");
+          renderStoredSeasonReview();
           xt("endBlock").classList.add("on");
           renderSeasonReviewLeaderboard(Ct.savedRun)
         }()
     }
+
+
+
+    function renderLocalizedSeasonExtremes() {
+      if (!Ct || !Array.isArray(Ct.myMatches)) return;
+
+      const wins = Ct.myMatches
+          .filter(match => match.gf > match.ga)
+          .sort((left, right) =>
+            right.gf - right.ga - (left.gf - left.ga) ||
+            right.gf - left.gf
+          ),
+        losses = Ct.myMatches
+          .filter(match => match.gf < match.ga)
+          .sort((left, right) =>
+            right.ga - right.gf - (left.ga - left.gf) ||
+            right.ga - left.ga
+          ),
+        biggestWin = wins[0],
+        biggestLoss = losses[0],
+        location = match =>
+          isArabicUi()
+            ? `${match.home ? "على أرضه" : "خارج أرضه"}، الجولة ${match.md}`
+            : `${match.home ? "home" : "away"}, MD ${match.md}`;
+
+      const winNode = document.getElementById("bigWin"),
+        lossNode = document.getElementById("bigLoss");
+
+      if (winNode) {
+        winNode.textContent = biggestWin
+          ? `${biggestWin.gf}–${biggestWin.ga} ${
+              isArabicUi() ? "أمام" : "vs"
+            } ${localizedClubName(biggestWin.opp)} (${location(biggestWin)})`
+          : isArabicUi()
+            ? "ما حقق الفريق أي فوز هذا الموسم."
+            : "No wins this season."
+      }
+
+      if (lossNode) {
+        lossNode.textContent = biggestLoss
+          ? `${biggestLoss.gf}–${biggestLoss.ga} ${
+              isArabicUi() ? "أمام" : "vs"
+            } ${localizedClubName(biggestLoss.opp)} (${location(biggestLoss)})`
+          : isArabicUi()
+            ? "أنهى الفريق الموسم من دون خسارة."
+            : "Unbeaten all season."
+      }
+    }
+
+    function renderLocalizedLeagueAwards() {
+      const awardsNode = document.getElementById("awards");
+      if (!awardsNode || !Ct) return;
+
+      const awards = trustedLeagueAwards(),
+        suffix = player =>
+          ` — ${
+            player.mine
+              ? Jt().toUpperCase()
+              : Q(player.club)
+          }`;
+
+      awardsNode.innerHTML = awards
+        ? `
+<div class="award"><div class="t">Top goal scorer<\/div><b>${escapeHtml(awards.topScorer.name)}<\/b><span>${awards.topScorer.g} ${isArabicUi() ? "هدف" : "goals"}${escapeHtml(suffix(awards.topScorer))}<\/span><\/div>
+<div class="award"><div class="t">Top assister<\/div><b>${escapeHtml(awards.topAssister.name)}<\/b><span>${awards.topAssister.a} ${isArabicUi() ? "صناعة" : "assists"}${escapeHtml(suffix(awards.topAssister))}<\/span><\/div>
+<div class="award"><div class="t">Golden Glove<\/div><b>${escapeHtml(awards.glove.name)}<\/b><span>${awards.glove.cs} ${isArabicUi() ? "شباك نظيفة" : "clean sheets"} — ${escapeHtml(awards.glove.mine ? Jt().toUpperCase() : Q(awards.glove.club))}<\/span><\/div>
+<div class="award"><div class="t">Best player<\/div><b>${escapeHtml(awards.best.name)}<\/b><span>${awards.best.g} ${isArabicUi() ? "هدف" : "G"} · ${awards.best.a} ${isArabicUi() ? "صناعة" : "A"}${escapeHtml(suffix(awards.best))}<\/span><\/div>`
+        : `<div class="empty">${
+            isArabicUi()
+              ? "جوائز الدوري غير متاحة مؤقتاً."
+              : "Trusted league awards are temporarily unavailable. No local awards were generated."
+          }<\/div>`;
+
+      translateUiTree(awardsNode, true)
+    }
+
+
+    function buildSaudiSeasonReview(data) {
+      if (!data) return null;
+
+      const isPerfect =
+          data.wins === 34 &&
+          data.draws === 0 &&
+          data.losses === 0,
+        overachieved =
+          data.position <= data.expected - 1,
+        underachieved =
+          data.position >= data.expected + 2,
+        scorer =
+          data.topScorer.nameAr ||
+          data.topScorer.name,
+        assister =
+          data.topAssister.nameAr ||
+          data.topAssister.name,
+        best =
+          data.bestPlayer.nameAr ||
+          data.bestPlayer.name,
+        record =
+          `${data.wins} فوز، ${data.draws} تعادل، ${data.losses} خسارة`,
+        bestWin = data.biggestWin
+          ? `وكان الفوز ${data.biggestWin.gf}–${data.biggestWin.ga} على ${localizedClubName(data.biggestWin.opp)} في الجولة ${data.biggestWin.md} أبرز محطات الموسم.`
+          : "وغاب الانتصار عن الفريق طوال الموسم.",
+        worstResult = data.biggestLoss
+          ? `أما أصعب ليلة فكانت الخسارة ${data.biggestLoss.gf}–${data.biggestLoss.ga} أمام ${localizedClubName(data.biggestLoss.opp)} في الجولة ${data.biggestLoss.md}.`
+          : "واللافت أن الفريق أنهى الموسم من دون أي خسارة.";
+
+      let head;
+      let opening;
+      let closing;
+
+      if (isPerfect) {
+        head = "العلامة الكاملة.. موسم دخل التاريخ";
+        opening =
+          `قدّم ${data.teamName} موسماً استثنائياً بكل المقاييس، وحسم اللقب بعد 34 انتصاراً من 34 مباراة. جمع الفريق ${data.points} نقطة، في إنجاز كامل ما ترك لمنافسيه أي فرصة طوال الموسم.`;
+        closing =
+          "موسم بلا تعادل ولا خسارة، وبيان واضح بأن هذه التشكيلة ما كانت تبحث عن اللقب فقط؛ كانت تبحث عن التاريخ وكتبته فعلاً."
+      } else if (data.champion) {
+        head = "من غرفة الدرافت إلى منصة التتويج";
+        opening =
+          `حوّل ${data.teamName} اختيارات الدرافت إلى فريق بطل، وأنهى الموسم في الصدارة برصيد ${data.points} نقطة. التشكيلة حافظت على شخصيتها وقت الضغط، واستحقت اللقب بعد مشوار اتسم بالقوة والثبات.`;
+        closing =
+          "في النهاية، الكأس ذهبت للفريق الأكثر تماسكاً. موسم ناجح بكل تفاصيله، ورسالة بأن بناء تشكيلة متوازنة أهم من جمع الأسماء فقط."
+      } else if (overachieved) {
+        head = "موسم فاق كل التوقعات";
+        opening =
+          `دخل ${data.teamName} الموسم بتوقعات تشير إلى المركز ${data.expected} تقريباً، لكنه قلب الحسابات وأنهى المشوار في المركز ${data.position} برصيد ${data.points} نقطة. الفريق عرف كيف يستفيد من نقاط قوته، وتحول إلى أحد أبرز قصص الموسم.`;
+        closing =
+          "ما تحقق يتجاوز الأرقام؛ الفريق رفع سقف الطموح وأثبت أن الاختيارات الموفقة قادرة على صناعة موسم أكبر من التوقعات."
+      } else if (underachieved) {
+        head = "موسم دون الطموحات";
+        opening =
+          `كانت التوقعات تضع ${data.teamName} حول المركز ${data.expected}، لكن الفريق أنهى الموسم في المركز ${data.position} برصيد ${data.points} نقطة. الجودة كانت موجودة، إلا أن التذبذب حرم التشكيلة من ترجمة إمكاناتها إلى مركز أفضل.`;
+        closing =
+          "النتيجة النهائية أقل من مستوى الأسماء الموجودة. التشكيلة تحتاج توازناً أكبر واستمرارية أوضح لو أرادت المنافسة في المحاولة القادمة."
+      } else {
+        head = "موسم متوازن ونتيجة منطقية";
+        opening =
+          `أنهى ${data.teamName} الموسم في المركز ${data.position} برصيد ${data.points} نقطة، قريباً من التوقعات التي وضعته حول المركز ${data.expected}. الفريق كان حاضراً في أغلب فترات الموسم، من دون أن يفرض نفسه بشكل دائم في سباق القمة.`;
+        closing =
+          "الموسم وضع أساساً جيداً، لكن الخطوة التالية تحتاج جودة أكبر في اللحظات الحاسمة حتى يتحول الفريق من منافس محترم إلى منافس على اللقب."
+      }
+
+      return {
+        head,
+        paras: [
+          opening,
+          `${bestWin} ${worstResult} وأنهى الفريق 34 جولة بسجل بلغ ${record}، وسجّل ${data.goalsFor} هدفاً واستقبل ${data.goalsAgainst}.`,
+          `على المستوى الفردي، تصدّر ${scorer} قائمة هدافي الفريق بـ${data.topScorer.goals} هدفاً، بينما صنع ${assister} ${data.topAssister.assists} أهداف. وظهر ${best} كأكثر لاعبي التشكيلة ثباتاً بمتوسط تقييم ${data.bestPlayer.averageRating}، مع ${data.cleanSheets} مباراة بشباك نظيفة.`,
+          closing
+        ]
+      }
+    }
+
+    function renderStoredSeasonReview() {
+      if (!lastSeasonReviewData) return;
+      const article = document.getElementById("article");
+      if (!article) return;
+
+      const review =
+        isArabicUi()
+          ? buildSaudiSeasonReview(lastSeasonReviewData)
+          : lastSeasonReviewData.english;
+
+      if (!review) return;
+
+      article.innerHTML =
+        `<h3>${escapeHtml(review.head)}<\/h3>` +
+        `<div class="byline">${
+          isArabicUi()
+            ? "تقرير الموسم · الدوري السعودي 25/26 · فريق الدرافت"
+            : "Season review · SPL 25/26 · Draft XI"
+        }<\/div>` +
+        review.paras
+          .map(paragraph => `<p>${escapeHtml(paragraph)}<\/p>`)
+          .join("")
+    }
+
 
     function $(t) {
       return t === Lt ? Ct.eff.ovr : getAISimulationStrength(t).ovr
@@ -7263,15 +8307,19 @@ Ct.myMatches.push({
         })),
         s = [...t].sort((t, s) => s.st.g - t.st.g || s.st.a - t.st.a)[0],
         a = [...t].sort((t, s) => s.st.a - t.st.a || s.st.g - t.st.g)[0];
-      xt("tsN").textContent = s.st.g, xt("tsName").textContent = s.s.player.name, xt("taN").textContent = a.st.a, xt("taName").textContent = a.s.player.name, xt("csN").textContent = Ct.table[Lt].cs;
-      const e = [...t].sort((t, s) => s.st.g + s.st.a - (t.st.g + t.st.a) || s.st.g - t.st.g);
+      xt("tsN").textContent = s.st.g, xt("tsName").textContent = localizedPlayerName(s.s.player), xt("taN").textContent = a.st.a, xt("taName").textContent = localizedPlayerName(a.s.player), xt("csN").textContent = Ct.table[Lt].cs;
+      const e = [...t].sort((t, s) => s.st.g + s.st.a - (t.st.g + t.st.a) || s.st.g - t.st.g),
+        goalLabel = isArabicUi() ? "هدف" : "G",
+        assistLabel = isArabicUi() ? "صناعة" : "A",
+        cleanSheetLabel = isArabicUi() ? "ش.ن" : "CS",
+        averageLabel = isArabicUi() ? "معدل" : "AVG";
       xt("pstatList").innerHTML = e.map(({
         s: t,
         st: s
       }) => {
         const a = s.apps ? (s.rsum / s.apps).toFixed(1) : "\u2014",
-          e = Yt.has(t.code) ? `${s.cs}<span class="lbl">CS<\/span>` : "";
-        return `<div class="pstat">\n      <span class="pos">${escapeHtml(t.code)}<\/span><span>${escapeHtml(t.player.name)}<\/span>\n      <span class="n">${s.g}<span class="lbl">G<\/span><\/span>\n      <span class="n">${s.a}<span class="lbl">A<\/span><\/span>\n      <span class="n">${e}<\/span>\n      <span class="n">${a}<span class="lbl">AVG<\/span><\/span>\n    <\/div>`
+          e = Yt.has(t.code) ? `${s.cs}<span class="lbl">${cleanSheetLabel}<\/span>` : "";
+        return `<div class="pstat">\n      <span class="pos">${escapeHtml(localizedPositionName(t.code))}<\/span><span>${escapeHtml(localizedPlayerName(t.player))}<\/span>\n      <span class="n">${s.g}<span class="lbl">${goalLabel}<\/span><\/span>\n      <span class="n">${s.a}<span class="lbl">${assistLabel}<\/span><\/span>\n      <span class="n">${e}<\/span>\n      <span class="n">${a}<span class="lbl">${averageLabel}<\/span><\/span>\n    <\/div>`
       }).join("")
     }
     const At = t => t[Math.floor(Math.random() * t.length)];
@@ -7321,7 +8369,7 @@ Ct.myMatches.push({
       syncDailyRunUi();
       registerRunStarted();
       Kt = [];
-      xt("formName").textContent = `${formation.name}${isDaily ? " · DAILY CHALLENGE" : ""}`;
+      xt("formName").textContent = `${localizedFormationName(formation.name)}${isDaily ? (isArabicUi() ? " · تحدي اليوم" : " · DAILY CHALLENGE") : ""}`;
       xt("rosterPanel").style.display = "none";
       xt("openSummaryBtn").style.display = "none";
       resetRouletteDisplay();
@@ -7425,7 +8473,7 @@ Ct.myMatches.push({
           n = document.createElement("button");
         n.className = "fcard";
         const l = a.slots.map(([t, s, a]) => `<i class="${"GK"===t?"gk":""}" style="left:${s}%;top:${.9*a+5}%"><\/i>`).join("");
-        n.innerHTML = `<h3>${escapeHtml(a.name)}<\/h3><div class="mini">${l}<\/div>`, n.addEventListener("click", () => {
+        n.innerHTML = `<h3>${escapeHtml(localizedFormationName(a.name))}<\/h3><div class="mini">${l}<\/div>`, n.addEventListener("click", () => {
           t.querySelectorAll(".fcard").forEach(t => t.classList.remove("sel")), n.classList.add("sel"), Tt.fkey = s, e()
         }), t.appendChild(n)
       }
@@ -7437,11 +8485,14 @@ Ct.myMatches.push({
       openStandardDraftFromMenu
     );
     xt("dailyChallengeBtn").addEventListener("click", openDailyChallengeScreen);
-    xt("recordsBtn").addEventListener("click", () => {
+    xt("headerLeaderboardBtn").addEventListener("click", () => {
       const typedName = xt("teamNameInput").value.trim();
       typedName && persistTeamName(typedName);
       renderRecordsScreen();
       n("scr-records")
+    });
+    xt("languageToggleBtn").addEventListener("click", () => {
+      setUiLanguage(isArabicUi() ? "en" : "ar")
     });
     xt("teamNameInput").addEventListener(
       "input",
@@ -7488,10 +8539,6 @@ xt("dailyStartBtn").addEventListener("click", async () => {
   startSecureDailyChallenge()
 });
     xt("recordsBackBtn").addEventListener("click", () => n("scr-menu"));
-    xt("leaderboardTabs").querySelectorAll("button").forEach(button => button.addEventListener("click", () => {
-      leaderboardPeriod = button.dataset.period;
-      renderLocalLeaderboard()
-    }));
     xt("globalLeaderboardTabs").querySelectorAll("button").forEach(button => button.addEventListener("click", () => {
       globalLeaderboardPeriod = button.dataset.period;
       renderGlobalLeaderboard()
@@ -7514,6 +8561,8 @@ xt("dailyStartBtn").addEventListener("click", async () => {
         renderSeasonReviewLeaderboard()
       })
     });
+    applyUiLanguage();
+
     console.info(
       `SPL Draft ${PHASE4_PRODUCTION_BUILD}: secure drafting, season simulation, player statistics, awards and trusted scoring are active.`
     );
@@ -7566,13 +8615,6 @@ xt("dailyStartBtn").addEventListener("click", async () => {
         }
       }
     }).catch(() => {});
-    xt("exportRecordsBtn").addEventListener("click", exportLocalProfile);
-    xt("importRecordsBtn").addEventListener("click", () => xt("importRecordsFile").click());
-    xt("importRecordsFile").addEventListener("change", event => importLocalProfileFile(event.target.files && event.target.files[0]));
-    xt("resetLocalDataBtn").addEventListener("click", event => m("Reset all local records?", "This permanently removes run history, achievements, personal records and Daily Challenge results from this browser.", "Reset Everything", () => {
-      resetLocalProfile();
-      l("Local records reset.")
-    }, event.currentTarget));
     xt("copyFinalResultBtn").addEventListener("click", () => Ct && Ct.savedRun && copyRunResult(Ct.savedRun));
     xt("viewRecordsBtn").addEventListener("click", () => {
       renderRecordsScreen();

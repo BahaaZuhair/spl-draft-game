@@ -485,3 +485,64 @@ body.daily-run-active #restartCtlBtn{
   .turnstile-gate-card{padding:20px 16px}
   .turnstile-gate-card h2{font-size:23px}
 }
+
+
+/* ===== Arabic-first bilingual production redesign ===== */
+.top-actions{display:flex;align-items:center;gap:9px;direction:ltr}
+.header-tool-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  min-height:39px;padding:8px 12px;border:1px solid rgba(232,185,75,.42);
+  border-radius:999px;color:var(--gold);background:rgba(15,32,25,.72);
+  font-size:12px;font-weight:700;letter-spacing:.02em;transition:background .15s,transform .12s,border-color .15s
+}
+.header-tool-btn:hover{background:var(--panel2);border-color:var(--gold);transform:translateY(-1px)}
+.header-tool-btn svg{width:18px;height:18px;fill:currentColor;flex:none}
+.language-flag{font-size:18px;line-height:1}
+.language-label,.header-tool-label{white-space:nowrap}
+.menu-actions-stack{display:flex;flex-direction:column;align-items:stretch;max-width:560px;margin:16px auto 0}
+.menu-actions-stack .btn{width:100%;min-width:0}
+html[dir="rtl"] body{font-family:var(--arabic)}
+html[dir="rtl"] header.top{direction:ltr;align-items:center}
+html[dir="rtl"] .screen,
+html[dir="rtl"] .modal,
+html[dir="rtl"] .toast,
+html[dir="rtl"] .achievement-toast{direction:rtl;text-align:right}
+html[dir="rtl"] .h1,
+html[dir="rtl"] .h2,
+html[dir="rtl"] .howto h3,
+html[dir="rtl"] .brand,
+html[dir="rtl"] .pick-no,
+html[dir="rtl"] .finalscore-number,
+html[dir="rtl"] .record-card b,
+html[dir="rtl"] .stat-card b{font-family:var(--arabic);text-transform:none;letter-spacing:0}
+html[dir="rtl"] .brand{font-family:var(--disp);text-transform:uppercase;letter-spacing:.04em}
+html[dir="rtl"] .lede{line-height:1.9}
+html[dir="rtl"] input{text-align:right}
+html[dir="rtl"] .records-section-head,
+html[dir="rtl"] .records-head,
+html[dir="rtl"] .season-top,
+html[dir="rtl"] .status,
+html[dir="rtl"] .club-head,
+html[dir="rtl"] .rowline{direction:rtl}
+html[dir="rtl"] table{direction:rtl}
+html[dir="rtl"] .tn{text-align:right}
+html[dir="rtl"] .actions{direction:rtl}
+html[dir="rtl"] .pcard,
+html[dir="rtl"] .run-card,
+html[dir="rtl"] .feed,
+html[dir="rtl"] .article{direction:rtl;text-align:right}
+html[dir="rtl"] .pcard .who .ar{display:none}
+html[dir="rtl"] .pcard .who b{font-family:var(--arabic)}
+html[dir="ltr"] .pcard .who .ar{display:block}
+.daily-settings{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:700px){
+  header.top{align-items:center}
+  .top-actions{width:auto}
+  .header-tool-label{display:none}
+  .header-tool-btn{padding:8px 10px}
+  .daily-settings{grid-template-columns:1fr}
+}
+@media(max-width:430px){
+  .language-label{display:none}
+  .header-tool-btn{min-width:41px}
+}

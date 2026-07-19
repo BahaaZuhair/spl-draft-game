@@ -1,18 +1,18 @@
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; script-src 'self' https://cdn.jsdelivr.net https://challenges.cloudflare.com; script-src-attr 'none'; style-src 'self' https://fonts.googleapis.com; style-src-elem 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src https://fonts.gstatic.com; connect-src 'self' https://wyxtriciyixkglcrppgh.supabase.co wss://wyxtriciyixkglcrppgh.supabase.co https://challenges.cloudflare.com; img-src 'self' data:; media-src 'none'; frame-src https://challenges.cloudflare.com; worker-src 'none'; manifest-src 'self'; form-action 'self'; upgrade-insecure-requests">
-<title>SPL Draft — Saudi Pro League</title>
+<title>SPL Draft — الدوري السعودي</title>
 
 
 
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700&family=Noto+Kufi+Arabic:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./styles.css" integrity="sha384-CHA/AnHnBNssCVQYYJtxFud0dzjJTfw7E0ctnNb2feAjjFpTAlZrfIi95cHapUzB" crossorigin="anonymous">
+<link rel="stylesheet" href="./styles.css" integrity="sha384-5nQq0+k71rP3ZuRAZ/cI5HNZ1Q1aiq+A1lt8lyTjegKyTTkJKTIOpf2MwEGtV+15" crossorigin="anonymous">
 
 
 
@@ -36,11 +36,19 @@
 
 <div class="wrap">
   <header class="top">
-    <div>
-      <div class="brand">SPL <span class="gold">Draft</span></div>
-      <div class="brand-sub">Saudi Pro League · seasons 00/01 – 25/26 · secure backend card pool</div>
+    <div class="brand" data-i18n-skip="true">SPL <span class="gold">Draft</span></div>
+    <div class="top-actions">
+      <button class="header-tool-btn" id="headerLeaderboardBtn" type="button" aria-label="Open leaderboards" title="Leaderboards">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M7 3h10v2h3v3c0 3.3-1.9 5.4-5 5.9A5.1 5.1 0 0 1 13 16.7V19h4v2H7v-2h4v-2.3A5.1 5.1 0 0 1 9 13.9C5.9 13.4 4 11.3 4 8V5h3V3Zm0 4H6v1c0 1.8.7 3 2.2 3.6A8.6 8.6 0 0 1 7 7Zm10 0c0 1.8-.4 3.4-1.2 4.6C17.3 11 18 9.8 18 8V7h-1Z"/>
+        </svg>
+        <span class="header-tool-label">Leaderboards</span>
+      </button>
+      <button class="header-tool-btn language-toggle" id="languageToggleBtn" type="button" aria-label="Switch language" title="English">
+        <span class="language-flag" aria-hidden="true">🇬🇧</span>
+        <span class="language-label">English</span>
+      </button>
     </div>
-    <div class="badge">V6.5.1 online</div>
   </header>
 
   <!-- ============ SCREEN 1: SETUP OPTIONS ============ -->
@@ -53,11 +61,10 @@
         <input id="teamNameInput" class="nameinput" type="text" maxlength="25" autocomplete="off" spellcheck="false"
                placeholder="e.g. Desert Falcons" aria-label="Enter your team name">
         <div class="nameerr" id="nameErr" role="alert" style="display:none">Please enter a team name — 1 to 25 characters, not just spaces.</div>
-        <div class="menubtns">
+        <div class="menubtns menu-actions-stack">
           <button class="btn" id="menuStartBtn">Start Game</button>
-          <button class="btn ghost" id="dailyChallengeBtn">Daily Challenge</button>
+          <button class="btn" id="dailyChallengeBtn">Daily Challenge</button>
           <button class="btn ghost" id="howtoBtn">How to Play</button>
-          <button class="btn ghost" id="recordsBtn">Records</button>
         </div>
       </div>
     </div>
@@ -71,14 +78,14 @@
       <p>Your team name appears in match results, the league table and the season awards.</p>
       <h3>2 · Set up the run</h3>
       <p><b>Difficulty:</b> Normal Mode gives you 2 skips for the whole run — a skip rerolls a club you don't like. Hard Mode gives no skips: every roll is final.</p>
-      <p><b>Draft mode:</b> <i>Ratings by Season</i> drafts the exact card of the season the roulette lands on and is eligible for global leaderboards. <i>Max Rating All-Time</i> uses the same rolls, but every player appears as his best-ever card and remains local-only.</p>
+      <p><b>Draft mode:</b> <i>Ratings by Season</i> drafts the exact card of the season the roulette lands on and is eligible for global leaderboards. <i>Max Rating All-Time</i> uses the same rolls, but every player appears as his best-ever card and does not enter the online leaderboards.</p>
       <p><b>Formation:</b> pick one of 22 shapes. Every drafted player must fit one of its positions.</p>
       <h3>3 · Draft your XI</h3>
       <p>Each round, two roulettes land on a club and a season — anywhere from 00/01 to 25/26. Pick one player from that roster who fits an open slot. The roulette only offers pools that can fill one of your open positions. Repeat until your XI is complete.</p>
       <h3>4 · Kick-off</h3>
       <p>Review your squad rating and title odds. You can edit positions before the season auto-starts after a 10-second countdown — or kick off immediately.</p>
       <h3>5 · The season</h3>
-      <p>Your draft replaces a lower-table club in the 25/26 league and plays all 34 matchdays. Play game by game or skip to the end. Standings, player stats and awards are tracked throughout.</p>
+      <p>Your draft enters the 25/26 league and plays all 34 matchdays. Play game by game or skip to the end. Standings, player stats and awards are tracked throughout.</p>
       <h3>6 · Full time</h3>
       <p>See your final position, season record, league table, squad statistics, awards and a season-review article. Restart Run starts a fresh draft any time.</p>
     </div>
@@ -92,7 +99,7 @@
     <div class="records-head">
       <div>
         <h1 class="h1" id="dailyTitle">Daily Challenge</h1>
-        <p class="lede">The formation, mode and roulette sequence are generated from today’s UTC date. The same game version produces the same challenge for everyone.</p>
+        <p class="lede">Test your luck with no skips and controlled positions.</p>
       </div>
       <button class="btn ghost sm" id="dailyBackBtn">Back</button>
     </div>
@@ -109,64 +116,44 @@
   <section id="scr-records" class="screen">
     <div class="records-head">
       <div>
-        <h1 class="h1">Records</h1>
-        <p class="lede">Personal records stay on this browser, while global rankings are shared securely through the online leaderboard.</p>
+        <h1 class="h1">Leaderboards &amp; Records</h1>
+        <p class="lede">Compare your best seasons, check today’s challenge, and review your latest runs.</p>
       </div>
       <button class="btn ghost sm" id="recordsBackBtn">Back</button>
     </div>
 
     <div class="records-stack">
-      <div class="panel">
-        <div class="h2">Personal Records</div>
-        <div class="record-grid" id="personalRecordsGrid"></div>
-      </div>
-
-      <div class="panel">
+      <div class="panel" id="globalLeaderboardPanel">
         <div class="records-section-head">
           <div>
-            <div class="h2">Local Leaderboards</div>
-            <p>My best completed runs saved on this device.</p>
+            <div class="h2">Standard Season Leaderboard</div>
+            <p>Ratings by Season runs only. Each player can appear with up to their best ten results.</p>
           </div>
-          <div class="record-tabs" id="leaderboardTabs" role="tablist" aria-label="Local leaderboard period">
-            <button class="sel" data-period="today">Today</button>
-            <button data-period="week">This Week</button>
-            <button data-period="month">This Month</button>
-            <button data-period="all">All Time</button>
+          <div class="online-tools">
+            <span class="badge online-state" id="onlineStatusBadge">Connecting</span>
+            <button class="btn ghost sm" id="refreshGlobalLeaderboardBtn" type="button">Refresh</button>
           </div>
         </div>
-        <div class="tablewrap local-table">
+        <div class="record-tabs" id="globalLeaderboardTabs" role="tablist" aria-label="Standard leaderboard period">
+          <button class="sel" data-period="today">Today</button>
+          <button data-period="week">This Week</button>
+          <button data-period="month">This Month</button>
+          <button data-period="all">All Time</button>
+        </div>
+        <div class="tablewrap local-table" style="margin-top:12px">
+          <div id="myGlobalRank" class="resume-draft-note" style="margin:0 0 10px"></div>
           <table class="lg">
-            <thead><tr><th>#</th><th>Score</th><th>Date</th><th>Difficulty</th><th>Draft</th><th>OVR</th><th>Finish</th><th>Pts</th><th>GD</th><th></th></tr></thead>
-            <tbody id="leaderboardBody"></tbody>
+            <thead><tr><th>#</th><th>Team</th><th>Score</th><th>Date</th><th>Difficulty</th><th>Draft</th><th>OVR</th><th>Finish</th><th>Pts</th><th>GD</th></tr></thead>
+            <tbody id="globalLeaderboardBody"><tr><td colspan="10" class="empty">Connecting to the online leaderboard…</td></tr></tbody>
           </table>
         </div>
-      </div>
-
-      <div class="panel">
-        <div class="h2">Statistics</div>
-        <div class="career-grid" id="careerStatsGrid"></div>
-      </div>
-
-      <div class="panel">
-        <div class="h2">Achievements</div>
-        <div class="achievement-grid" id="achievementsGrid"></div>
-      </div>
-
-      <div class="panel">
-        <div class="h2">Recent Runs</div>
-        <div class="recent-runs" id="recentRuns"></div>
-      </div>
-
-      <div class="panel">
-        <div class="h2">Daily Challenge History</div>
-        <div class="daily-history" id="dailyHistory"></div>
       </div>
 
       <div class="panel" id="dailyLeaderboardPanel">
         <div class="records-section-head">
           <div>
             <div class="h2">Daily Challenge Leaderboard</div>
-            <p>Today’s luck-based Daily Challenge. Each player’s best score from their first three leaderboard attempts is shown once.</p>
+            <p>Today’s no-skip challenge. The first three attempts are eligible for this leaderboard.</p>
           </div>
           <div class="online-tools">
             <span class="badge online-state" id="dailyLeaderboardStatusBadge">Today</span>
@@ -182,41 +169,29 @@
         </div>
       </div>
 
-      <div class="panel" id="globalLeaderboardPanel">
-        <div class="records-section-head">
-          <div>
-            <div class="h2">Standard Season Leaderboard</div>
-            <p>Normal Ratings by Season runs only. Daily Challenge scores use the separate Daily leaderboard above. Max Rating All-Time remains local-only.</p>
-          </div>
-          <div class="online-tools">
-            <span class="badge online-state" id="onlineStatusBadge">Connecting</span>
-            <button class="btn ghost sm" id="refreshGlobalLeaderboardBtn" type="button">Refresh</button>
-          </div>
-        </div>
-        <div class="record-tabs" id="globalLeaderboardTabs" role="tablist" aria-label="Global leaderboard period">
-          <button class="sel" data-period="today">Today</button>
-          <button data-period="week">This Week</button>
-          <button data-period="month">This Month</button>
-          <button data-period="all">All Time</button>
-        </div>
-        <div class="tablewrap local-table" style="margin-top:12px">
-          <div id="myGlobalRank" class="resume-draft-note" style="margin:0 0 10px"></div>
-          <table class="lg">
-            <thead><tr><th>#</th><th>Team</th><th>Score</th><th>Date</th><th>Difficulty</th><th>Draft</th><th>OVR</th><th>Finish</th><th>Pts</th><th>GD</th></tr></thead>
-            <tbody id="globalLeaderboardBody"><tr><td colspan="10" class="empty">Connecting to the online leaderboard…</td></tr></tbody>
-          </table>
-        </div>
+      <div class="panel">
+        <div class="h2">Personal Records</div>
+        <div class="record-grid" id="personalRecordsGrid"></div>
       </div>
 
       <div class="panel">
-        <div class="h2">Local Data</div>
-        <p class="data-note">Export a backup, restore a valid backup, or erase only the records stored in this browser. The player database is never included or changed.</p>
-        <div class="actions">
-          <button class="btn ghost sm" id="exportRecordsBtn">Export Records</button>
-          <button class="btn ghost sm" id="importRecordsBtn">Import Records</button>
-          <button class="btn danger sm" id="resetLocalDataBtn">Reset Local Data</button>
-          <input id="importRecordsFile" class="visually-hidden" type="file" accept="application/json,.json" aria-label="Import SPL Draft records backup">
-        </div>
+        <div class="h2">Statistics</div>
+        <div class="career-grid" id="careerStatsGrid"></div>
+      </div>
+
+      <div class="panel">
+        <div class="h2">Achievements</div>
+        <div class="achievement-grid" id="achievementsGrid"></div>
+      </div>
+
+      <div class="panel">
+        <div class="h2">Latest 10 Runs</div>
+        <div class="recent-runs" id="recentRuns"></div>
+      </div>
+
+      <div class="panel">
+        <div class="h2">Daily Challenge History</div>
+        <div class="daily-history" id="dailyHistory"></div>
       </div>
     </div>
   </section>
@@ -230,7 +205,7 @@
         <div class="panel">
           <div class="opt-label">Difficulty</div>
           <div class="moderow" id="diffRow">
-            <button class="modecard" data-v="2"><b>Normal Mode — 2 Skips</b><span>Two rerolls per run for clubs you don't like.</span></button>
+            <button class="modecard sel" data-v="2"><b>Normal Mode — 2 Skips</b><span>Two rerolls per run for clubs you don't like.</span></button>
             <button class="modecard" data-v="0"><b>Hard Mode — No Skips</b><span>Every roll is final. No rerolls, no mercy.</span></button>
           </div>
         </div>
@@ -238,7 +213,7 @@
           <div class="opt-label">Draft mode</div>
           <div class="moderow" id="modeRow">
             <button class="modecard sel" data-v="season"><b>Ratings by Season</b><span>Roulette lands on a club and a season. You draft that exact season's card.</span></button>
-            <button class="modecard" data-v="alltime"><b>Max Rating All-Time</b><span>Same club-and-season rolls — but every player on the roster appears as his peak, best-ever card.</span><small class="mode-note">Local records only — this mode does not enter global leaderboards.</small></button>
+            <button class="modecard" data-v="alltime"><b>Max Rating All-Time</b><span>Same club-and-season rolls — but every player on the roster appears as his peak, best-ever card.</span></button>
           </div>
         </div>
       </div>
@@ -317,7 +292,7 @@
     <div class="season-top">
       <div>
         <h1 class="h1">Season 25/26</h1>
-        <div class="season-sub"><span id="seasonYou">Your draft</span> replaces <b id="replacedClub"></b> · Matchday <b id="mdNow">0</b> / 34</div>
+        <div class="season-sub"><span id="seasonYou">Your draft</span> · Matchday <b id="mdNow">0</b> / 34</div>
       </div>
       <div class="season-ctl" id="seasonCtl">
         <button class="btn" id="nextMdBtn">Play Next Game</button>
@@ -547,6 +522,6 @@
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer referrerpolicy="no-referrer"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.5" integrity="sha384-Fntl9b+IRzm2GKZK0c129fQFknWsn8pyxDejLO4wwds1LF9DSob2K2QXlfw8EIXn" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="./app.js?v=phase7e-resume-routing-fix-1" integrity="sha384-uxuPmJ2cfyjvoN2A3/BP9tV9amLo5EwmpD3Sf6KUYSoiIk95WuBXdPRKIaw2mabn" crossorigin="anonymous"></script>
+<script src="./app.js?v=arabic-design-final-1" integrity="sha384-kBYDNFRqj7yNRX099cMKXvgSjcx4Si8kH+qSZeV4jFGmF6e1qenJixgP7jXJa4I3" crossorigin="anonymous"></script>
 </body>
 </html>
