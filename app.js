@@ -6,6 +6,11 @@
         "arabic-design-final-2026-07-19",
       TURNSTILE_SITE_KEY = "0x4AAAAAAD4gP5siHnkvX-5i",
       TURNSTILE_SCRIPT_TIMEOUT_MS = 15000,
+      TURNSTILE_CHALLENGE_TIMEOUT_MS = 45000,
+      SESSION_RESTORE_TIMEOUT_MS = 8000,
+      ANONYMOUS_SIGN_IN_TIMEOUT_MS = 20000,
+      PUBLIC_RPC_TIMEOUT_MS = 20000,
+      PERSONAL_RPC_TIMEOUT_MS = 15000,
       nt = ["00/01", "01/02", "02/03", "03/04", "04/05", "05/06", "06/07", "07/08", "08/09", "09/10", "10/11", "11/12", "12/13", "13/14", "14/15", "15/16", "16/17", "17/18", "18/19", "19/20", "20/21", "21/22", "22/23", "23/24", "24/25", "25/26"], lt = t => "number" == typeof t && isFinite(t) ? t : "" === t || null == t ? 0 : parseFloat(t) || 0, rt = {
       "Al-Hilal": {
         code: "HIL",
@@ -1077,7 +1082,7 @@ function getDerivedAIStrength(clubId) {
         "Leaderboards & Records": "لوحات الصدارة والسجل",
         "Compare your best seasons, check today’s challenge, and review your latest runs.": "قارن أفضل مواسمك، تابع تحدي اليوم، وراجع آخر محاولاتك.",
         "Standard Season Leaderboard": "ترتيب الموسم العادي",
-        "Ratings by Season runs only. Each player can appear with up to their best ten results.": "خاص بنمط تقييم الموسم، ويظهر لكل لاعب أفضل عشر نتائج.",
+        "Ratings by Season runs only. Each player can appear with up to their best three retained Standard results.": "خاص بنمط تقييم الموسم، ويُحتفظ لكل لاعب بأفضل ثلاث نتائج فقط.",
         "Daily Challenge Leaderboard": "ترتيب تحدي اليوم",
         "Today’s no-skip challenge. The first three attempts are eligible for this leaderboard.": "تحدي اليوم بدون تخطّي، وأول ثلاث محاولات تدخل الترتيب.",
         "Personal Records": "أرقامك الشخصية",
@@ -1086,6 +1091,10 @@ function getDerivedAIStrength(clubId) {
         "Latest 10 Runs": "آخر 10 محاولات",
         "Daily Challenge History": "سجل تحدي اليوم",
         "Connecting": "جاري الاتصال",
+        "Public": "عام",
+        "Checking for an existing player session…": "جاري التحقق من وجود جلسة لاعب محفوظة…",
+        "Start or resume secure gameplay to view your Daily rank.": "ابدأ أو استأنف لعباً آمناً لعرض ترتيبك اليومي.",
+        "Start or resume secure gameplay to view your rank.": "ابدأ أو استأنف لعباً آمناً لعرض ترتيبك.",
         "Refresh": "تحديث",
         "Today": "اليوم",
         "This Week": "هذا الأسبوع",
@@ -1373,7 +1382,12 @@ function getDerivedAIStrength(clubId) {
         "Refreshing the secure connection…": "جاري تحديث الاتصال الآمن…",
         "Retrying the secure connection…": "جاري إعادة محاولة الاتصال الآمن…",
         "The secure connection could not be completed. Check your connection and retry.": "تعذر إكمال الاتصال الآمن. تأكد من اتصالك وجرّب.",
+        "The secure connection could not be completed. Check your connection and retry manually.": "تعذر إكمال الاتصال الآمن. تأكد من اتصالك ثم أعد المحاولة يدوياً.",
         "The security check could not finish. Check your connection and retry.": "التحقق الأمني ما اكتمل. تأكد من اتصالك وجرّب.",
+        "The security check could not finish. Check your connection and retry manually.": "التحقق الأمني ما اكتمل. تأكد من اتصالك ثم أعد المحاولة يدوياً.",
+        "The server is busy because too many requests arrived. Please retry manually in a moment.": "السيرفر مشغول بسبب كثرة الطلبات. أعد المحاولة يدوياً بعد قليل.",
+        "The server took too long to respond. Please retry manually in a moment.": "السيرفر تأخر في الرد. أعد المحاولة يدوياً بعد قليل.",
+        "The request timed out or the server is busy. Please retry manually in a moment.": "انتهت مهلة الطلب أو السيرفر مشغول. أعد المحاولة يدوياً بعد قليل.",
         "Could not start the game — please update your browser and reload.": "تعذر تشغيل اللعبة — حدّث المتصفح وأعد تحميل الصفحة.",
         "English": "English",
         "Arabic": "عربي",
@@ -1748,9 +1762,14 @@ function getDerivedAIStrength(clubId) {
 
 
     let localProfile = loadLocalProfile(),
+      publicOnlineClient = null,
       onlineClient = null,
       onlineUser = null,
       onlineReadyPromise = null,
+      anonymousSignInPromise = null,
+      pendingSubmissionFlushPromise = null,
+      lastSessionRestoreError = null,
+      onlineListenersBound = !1,
       globalLeaderboardPeriod = "today",
       reviewLeaderboardPeriod = "today",
       reviewLeaderboardRun = null;
@@ -1823,12 +1842,69 @@ function getDerivedAIStrength(clubId) {
       if (container) container.replaceChildren()
     }
 
+    function createClientTimeoutError(label) {
+      const error = new Error(`${label} timed out`);
+      error.name = "TimeoutError";
+      error.code = "CLIENT_TIMEOUT";
+      return error
+    }
+
+    function withTimeout(promise, timeoutMs, label) {
+      let timeoutId = null;
+      const timeoutPromise = new Promise((resolve, reject) => {
+        timeoutId = window.setTimeout(
+          () => reject(createClientTimeoutError(label)),
+          timeoutMs
+        )
+      });
+      return Promise.race([
+        Promise.resolve(promise),
+        timeoutPromise
+      ]).finally(() => {
+        if (null !== timeoutId) window.clearTimeout(timeoutId)
+      })
+    }
+
+    function onlineErrorStatus(error) {
+      const raw =
+        error && (
+          error.status ||
+          error.statusCode ||
+          error.context && error.context.status ||
+          error.code
+        );
+      const status = Number(raw);
+      return Number.isFinite(status) ? status : 0
+    }
+
+    function isBusyOnlineError(error) {
+      const status = onlineErrorStatus(error),
+        code = String(
+          error && (error.errorCode || error.code) || ""
+        ).toLowerCase(),
+        message = String(error && error.message || error || "").toLowerCase();
+      return 429 === status ||
+        503 === status ||
+        524 === status ||
+        "client_timeout" === code ||
+        "TimeoutError" === (error && error.name) ||
+        /busy[_-]?server|server[_-]?busy|timed?\s*out|timeout|too many requests|rate limit|temporarily overloaded|overloaded/.test(`${code} ${message}`)
+    }
+
+    function onlineFailureMessage(error, fallback) {
+      if (!isBusyOnlineError(error)) return fallback;
+      const status = onlineErrorStatus(error);
+      if (429 === status) return "The server is busy because too many requests arrived. Please retry manually in a moment.";
+      if (524 === status) return "The server took too long to respond. Please retry manually in a moment.";
+      return "The request timed out or the server is busy. Please retry manually in a moment."
+    }
+
     function waitForTurnstileApi() {
       return new Promise((resolve, reject) => {
         const startedAt = Date.now(),
           check = () => {
             if (window.turnstile && "function" === typeof window.turnstile.render) return resolve(window.turnstile);
-            if (Date.now() - startedAt >= TURNSTILE_SCRIPT_TIMEOUT_MS) return reject(new Error("Cloudflare security check did not load"));
+            if (Date.now() - startedAt >= TURNSTILE_SCRIPT_TIMEOUT_MS) return reject(createClientTimeoutError("Cloudflare security check loading"));
             window.setTimeout(check, 50)
           };
         check()
@@ -1843,114 +1919,228 @@ function getDerivedAIStrength(clubId) {
           container = document.getElementById("turnstileWidget");
         if (!container) throw new Error("Security-check container is unavailable");
         removeTurnstileWidget();
-        return new Promise((resolve, reject) => {
-          let settled = !1,
-            transientErrorCount = 0;
-          const fail = message => {
-            if (settled) return;
-            settled = !0;
-            reject(new Error(message))
-          };
-          try {
-            turnstileWidgetId = turnstile.render(container, {
-              sitekey: TURNSTILE_SITE_KEY,
-              theme: "auto",
-              size: "flexible",
-              appearance: "interaction-only",
-              action: "anonymous_sign_in",
-              retry: "auto",
-              "retry-interval": 1500,
-              callback: token => {
-                if (settled) return;
-                settled = !0;
-                updateTurnstileGate("Verified. Connecting to the game…", "background");
-                resolve(token)
-              },
-              "before-interactive-callback": () => updateTurnstileGate("Cloudflare needs a quick confirmation to continue.", "interactive"),
-              "error-callback": code => {
-                if (settled) return !0;
-                transientErrorCount += 1;
-                console.warn("Turnstile verification error.", {
-                  code: code || "unknown",
-                  attempt: transientErrorCount
-                });
-                if (transientErrorCount <= 2) {
-                  updateTurnstileGate("Retrying the secure connection…", "background");
-                  return !1
-                }
-                fail(`Cloudflare security check failed${code ? ` (${code})` : ""}`);
-                return !0
-              },
-              "expired-callback": () => {
-                if (!settled) updateTurnstileGate("Refreshing the secure connection…", "background")
-              },
-              "timeout-callback": () => {
-                if (!settled) updateTurnstileGate("Retrying the secure connection…", "background")
-              }
-            })
-          } catch (error) {
-            fail(error && error.message ? error.message : "Cloudflare security check failed")
-          }
-        })
+        return withTimeout(
+          new Promise((resolve, reject) => {
+            let settled = !1;
+            const fail = message => {
+              if (settled) return;
+              settled = !0;
+              reject(new Error(message))
+            };
+            try {
+              turnstileWidgetId = turnstile.render(container, {
+                sitekey: TURNSTILE_SITE_KEY,
+                theme: "auto",
+                size: "flexible",
+                appearance: "interaction-only",
+                action: "anonymous_sign_in",
+                retry: "never",
+                callback: token => {
+                  if (settled) return;
+                  settled = !0;
+                  updateTurnstileGate("Verified. Connecting to the game…", "background");
+                  resolve(token)
+                },
+                "before-interactive-callback": () => updateTurnstileGate("Cloudflare needs a quick confirmation to continue.", "interactive"),
+                "error-callback": code => {
+                  fail(`Cloudflare security check failed${code ? ` (${code})` : ""}`);
+                  return !0
+                },
+                "expired-callback": () => fail("Cloudflare security check expired"),
+                "timeout-callback": () => fail("Cloudflare security check timed out")
+              })
+            } catch (error) {
+              fail(error && error.message ? error.message : "Cloudflare security check failed")
+            }
+          }),
+          TURNSTILE_CHALLENGE_TIMEOUT_MS,
+          "Cloudflare security check"
+        )
       })();
       try {
         return await turnstileTokenPromise
       } catch (error) {
-        updateTurnstileGate("The security check could not finish. Check your connection and retry.", "error");
+        removeTurnstileWidget();
+        updateTurnstileGate(
+          onlineFailureMessage(
+            error,
+            "The security check could not finish. Check your connection and retry manually."
+          ),
+          "error"
+        );
         throw error
       } finally {
         turnstileTokenPromise = null
       }
     }
 
-    async function initializeOnlineBackend() {
-      if (onlineReadyPromise) return onlineReadyPromise;
-      onlineReadyPromise = (async () => {
-        setOnlineStatus("connecting", "Connecting");
-        if (!window.supabase || "function" !== typeof window.supabase.createClient) throw new Error("Supabase client library did not load");
-        onlineClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    function initializePublicOnlineBackend() {
+      if (publicOnlineClient) return publicOnlineClient;
+      if (!window.supabase || "function" !== typeof window.supabase.createClient) {
+        throw new Error("Supabase client library did not load")
+      }
+      publicOnlineClient = window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_PUBLISHABLE_KEY,
+        {
+          auth: {
+            persistSession: !1,
+            autoRefreshToken: !1,
+            detectSessionInUrl: !1,
+            storageKey: "spl-draft-public-anon"
+          }
+        }
+      );
+      return publicOnlineClient
+    }
+
+    function bindOnlineListeners() {
+      if (onlineListenersBound) return;
+      onlineListenersBound = !0;
+      window.addEventListener("online", () => {
+        setOnlineStatus("online", onlineUser ? "Online" : "Public");
+        if (onlineUser) flushPendingOnlineSubmissions();
+        if ("scr-records" === activeScreenId()) {
+          renderDailyLeaderboard();
+          renderGlobalLeaderboard()
+        }
+      });
+      window.addEventListener("offline", () => setOnlineStatus("offline", "Offline"))
+    }
+
+    function getOnlineClient() {
+      if (onlineClient) return onlineClient;
+      if (!window.supabase || "function" !== typeof window.supabase.createClient) {
+        throw new Error("Supabase client library did not load")
+      }
+      onlineClient = window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_PUBLISHABLE_KEY,
+        {
           auth: {
             persistSession: !0,
             autoRefreshToken: !0,
             detectSessionInUrl: !1
           }
-        });
-        let { data: sessionData, error: sessionError } = await onlineClient.auth.getSession();
-        if (sessionError) throw sessionError;
-        let session = sessionData && sessionData.session;
-        if (!session) {
-          const captchaToken = await requestAnonymousSignInCaptchaToken(),
-            { data, error } = await onlineClient.auth.signInAnonymously({
-              options: { captchaToken }
-            });
-          if (error) {
-            removeTurnstileWidget();
-            throw error
-          }
-          session = data && data.session;
-          removeTurnstileWidget();
-          closeTurnstileGate()
         }
-        if (!session || !session.user) throw new Error("Anonymous session was not created");
-        onlineUser = session.user;
-        setOnlineStatus("online", "Online");
-        window.addEventListener("online", () => {
-          setOnlineStatus("online", "Online");
-          flushPendingOnlineSubmissions();
-          renderGlobalLeaderboard()
-        });
-        window.addEventListener("offline", () => setOnlineStatus("offline", "Offline"));
-        await flushPendingOnlineSubmissions();
-        return onlineClient
+      );
+      bindOnlineListeners();
+      return onlineClient
+    }
+
+    async function restoreExistingOnlineSession() {
+      if (onlineReadyPromise) return onlineReadyPromise;
+      const client = getOnlineClient();
+      onlineReadyPromise = (async () => {
+        setOnlineStatus("connecting", "Connecting");
+        const { data, error } = await withTimeout(
+          client.auth.getSession(),
+          SESSION_RESTORE_TIMEOUT_MS,
+          "Session restoration"
+        );
+        if (error) throw error;
+        const session = data && data.session || null;
+        onlineUser = session && session.user || null;
+        lastSessionRestoreError = null;
+        setOnlineStatus(
+          navigator.onLine ? "online" : "offline",
+          navigator.onLine ? onlineUser ? "Online" : "Public" : "Offline"
+        );
+        return session
       })().catch(error => {
-        console.warn("Online leaderboard unavailable.", error);
-        setOnlineStatus("offline", "Offline");
-        const gate = document.getElementById("turnstileGate");
-        if (gate && !gate.hidden) updateTurnstileGate("The secure connection could not be completed. Check your connection and retry.", "error");
-        onlineReadyPromise = null;
-        throw error
+        lastSessionRestoreError = error;
+        onlineUser = null;
+        console.warn("Could not restore the existing online session.", error);
+        setOnlineStatus(
+          navigator.onLine ? "online" : "offline",
+          navigator.onLine ? "Public" : "Offline"
+        );
+        return null
+      }).finally(() => {
+        onlineReadyPromise = null
       });
       return onlineReadyPromise
+    }
+
+    async function initializeOnlineBackend() {
+      const client = getOnlineClient();
+      await restoreExistingOnlineSession();
+      return client
+    }
+
+    async function ensureAuthenticatedOnlineBackend(options = {}) {
+      const createAnonymous = !!options.createAnonymous,
+        client = getOnlineClient();
+
+      if (onlineUser) return client;
+      await restoreExistingOnlineSession();
+      if (onlineUser) return client;
+
+      if (!createAnonymous) {
+        if (lastSessionRestoreError) throw lastSessionRestoreError;
+        const error = new Error("An authenticated player session is required");
+        error.code = "AUTH_SESSION_REQUIRED";
+        throw error
+      }
+
+      if (anonymousSignInPromise) return anonymousSignInPromise;
+
+      let signalSignInRequestStarted;
+      const signInRequestStarted = new Promise(resolve => {
+          signalSignInRequestStarted = resolve
+        }),
+        signInCompletion = (async () => {
+          const captchaToken = await requestAnonymousSignInCaptchaToken(),
+            signInRequest = client.auth.signInAnonymously({
+              options: { captchaToken }
+            });
+
+          signalSignInRequestStarted();
+          const { data, error } = await signInRequest;
+          if (error) throw error;
+          const session = data && data.session;
+          if (!session || !session.user) {
+            throw new Error("Anonymous session was not created")
+          }
+          onlineUser = session.user;
+          lastSessionRestoreError = null;
+          removeTurnstileWidget();
+          closeTurnstileGate();
+          setOnlineStatus("online", "Online");
+          await flushPendingOnlineSubmissions();
+          return client
+        })();
+
+      const exposedPromise = (async () => {
+        await Promise.race([
+          signInRequestStarted,
+          signInCompletion
+        ]);
+        return withTimeout(
+          signInCompletion,
+          ANONYMOUS_SIGN_IN_TIMEOUT_MS,
+          "Anonymous sign-in"
+        )
+      })().catch(error => {
+        removeTurnstileWidget();
+        updateTurnstileGate(
+          onlineFailureMessage(
+            error,
+            "The secure connection could not be completed. Check your connection and retry manually."
+          ),
+          "error"
+        );
+        throw error
+      });
+
+      anonymousSignInPromise = exposedPromise;
+      signInCompletion.finally(() => {
+        if (anonymousSignInPromise === exposedPromise) {
+          anonymousSignInPromise = null
+        }
+      }).catch(() => {});
+
+      return exposedPromise
     }
 
     function setDraftBackendStatus(state, text) {
@@ -2188,7 +2378,7 @@ function getDerivedAIStrength(clubId) {
       }
 
       try {
-        await initializeOnlineBackend();
+        await ensureAuthenticatedOnlineBackend({ createAnonymous: !0 });
 
         const { data, error } = await onlineClient.functions.invoke(
           "start-draft",
@@ -2399,7 +2589,7 @@ function getDerivedAIStrength(clubId) {
       ) {
         throw new Error("Server draft run is not ready")
       }
-      await initializeOnlineBackend();
+      await ensureAuthenticatedOnlineBackend();
       const { data, error } = await onlineClient.functions.invoke("roll-draft", {
         body: {
           runId: gt.serverShadow.serverRunId,
@@ -2608,7 +2798,7 @@ function getDerivedAIStrength(clubId) {
     }
 
     async function invokeServerSelection(candidate, offer) {
-      await initializeOnlineBackend();
+      await ensureAuthenticatedOnlineBackend();
 
       const { data, error } = await onlineClient.functions.invoke(
         "select-player",
@@ -2787,7 +2977,7 @@ function getDerivedAIStrength(clubId) {
       saveLocalProfile();
       updateOnlineSubmissionNote(run);
       try {
-        await initializeOnlineBackend();
+        await ensureAuthenticatedOnlineBackend();
         const { data, error } = await onlineClient.functions.invoke("submit-score", {
           body: onlinePayloadForRun(run)
         });
@@ -2822,25 +3012,37 @@ function getDerivedAIStrength(clubId) {
     }
 
     async function flushPendingOnlineSubmissions() {
-      const pending = localProfile.runHistory
-        .filter(run =>
-          run &&
-          run.isDailyChallenge &&
-          "official" === run.dailyAttemptType &&
-          run.onlineSubmission &&
-          (
-            "pending" === run.onlineSubmission.status ||
-            "error" === run.onlineSubmission.status
-          )
-        )
-        .slice(0, 10);
+      if (!onlineUser) return !1;
+      if (pendingSubmissionFlushPromise) return pendingSubmissionFlushPromise;
 
-      for (const run of pending) {
-        await submitRunOnline(run, {
-          silent: !0
-        })
-      }
+      pendingSubmissionFlushPromise = (async () => {
+        const pending = localProfile.runHistory
+          .filter(run =>
+            run &&
+            run.isDailyChallenge &&
+            "official" === run.dailyAttemptType &&
+            run.onlineSubmission &&
+            (
+              "pending" === run.onlineSubmission.status ||
+              "error" === run.onlineSubmission.status
+            )
+          )
+          .slice(0, 10);
+
+        for (const run of pending) {
+          if (!onlineUser) break;
+          await submitRunOnline(run, {
+            silent: !0
+          })
+        }
+        return !0
+      })().finally(() => {
+        pendingSubmissionFlushPromise = null
+      });
+
+      return pendingSubmissionFlushPromise
     }
+
 
     async function renderDailyLeaderboard() {
       const panel =
@@ -2871,18 +3073,20 @@ function getDerivedAIStrength(clubId) {
       body.innerHTML =
         '<tr><td colspan="9" class="empty">Loading today’s Daily scores…<\/td><\/tr>';
       rankNode.textContent =
-        "Loading your Daily rank…";
+        "Checking for an existing player session…";
 
       try {
-        await initializeOnlineBackend();
-
-        const boardResult =
-          await onlineClient.rpc(
-            "get_daily_leaderboard_v1",
-            {
-              p_challenge_date: null,
-              p_limit: 100
-            }
+        const publicClient = initializePublicOnlineBackend(),
+          boardResult = await withTimeout(
+            publicClient.rpc(
+              "get_daily_leaderboard_v1",
+              {
+                p_challenge_date: null,
+                p_limit: 100
+              }
+            ),
+            PUBLIC_RPC_TIMEOUT_MS,
+            "Daily leaderboard"
           );
 
         if (boardResult.error) {
@@ -2908,22 +3112,43 @@ function getDerivedAIStrength(clubId) {
                 <td>${+row.goal_difference > 0 ? "+" : ""}${Math.round(+row.goal_difference || 0)}<\/td>
               <\/tr>`).join("")
             : '<tr><td colspan="9" class="empty">No Daily scores have been completed today.<\/td><\/tr>';
+      } catch (error) {
+        console.warn(
+          "Could not load Daily leaderboard.",
+          error
+        );
+        body.innerHTML =
+          '<tr><td colspan="9" class="empty">Daily leaderboard unavailable.<\/td><\/tr>';
+        rankNode.textContent =
+          onlineFailureMessage(
+            error,
+            "Your Daily rank is temporarily unavailable."
+          );
+        return
+      }
 
-        const rankResult =
-          await onlineClient.rpc(
+      await initializeOnlineBackend();
+      if (!onlineUser) {
+        rankNode.textContent =
+          "Start or resume secure gameplay to view your Daily rank.";
+        return
+      }
+
+      try {
+        const rankResult = await withTimeout(
+          onlineClient.rpc(
             "get_my_daily_leaderboard_rank",
             {
               p_challenge_date: null
             }
-          );
+          ),
+          PERSONAL_RPC_TIMEOUT_MS,
+          "Personal Daily rank"
+        );
 
-        if (rankResult.error) {
-          throw rankResult.error
-        }
+        if (rankResult.error) throw rankResult.error;
 
-        const rank =
-          rankResult.data || {};
-
+        const rank = rankResult.data || {};
         rankNode.textContent =
           rank.hasScore
             ? `Your Daily rank: ${rank.rankLabel} · Best score: ${Math.round(+(
@@ -2935,38 +3160,43 @@ function getDerivedAIStrength(clubId) {
               ) || 0)} / 3`
             : "Your Daily rank: Unranked · Complete one of your first three attempts to enter."
       } catch (error) {
-        console.warn(
-          "Could not load Daily leaderboard.",
-          error
-        );
-
-        body.innerHTML =
-          '<tr><td colspan="9" class="empty">Daily leaderboard unavailable.<\/td><\/tr>';
+        console.warn("Could not load personal Daily rank.", error);
         rankNode.textContent =
-          "Your Daily rank is temporarily unavailable."
+          onlineFailureMessage(
+            error,
+            "Your Daily rank is temporarily unavailable."
+          )
       }
     }
 
+
     async function renderGlobalLeaderboard() {
       const tabs = document.getElementById("globalLeaderboardTabs"),
-        body = document.getElementById("globalLeaderboardBody");
+        body = document.getElementById("globalLeaderboardBody"),
+        myRankNode = document.getElementById("myGlobalRank");
       if (!tabs || !body) return;
       tabs.querySelectorAll("button").forEach(button => button.classList.toggle("sel", button.dataset.period === globalLeaderboardPeriod));
       body.innerHTML = '<tr><td colspan="10" class="empty">Loading global scores…<\/td><\/tr>';
+      if (myRankNode) myRankNode.textContent = "Checking for an existing player session…";
+
       try {
-        await initializeOnlineBackend();
-        const { data, error } = await onlineClient.rpc(
-          SERVER_DAILY_ENABLED
-            ? "get_global_leaderboard_v2"
-            : "get_global_leaderboard",
-          {
-            p_period: globalLeaderboardPeriod,
-            p_limit:
+        const publicClient = initializePublicOnlineBackend(),
+          { data, error } = await withTimeout(
+            publicClient.rpc(
               SERVER_DAILY_ENABLED
-                ? 100
-                : 10
-          }
-        );
+                ? "get_global_leaderboard_v2"
+                : "get_global_leaderboard",
+              {
+                p_period: globalLeaderboardPeriod,
+                p_limit:
+                  SERVER_DAILY_ENABLED
+                    ? 100
+                    : 10
+              }
+            ),
+            PUBLIC_RPC_TIMEOUT_MS,
+            "Standard leaderboard"
+          );
         if (error) throw error;
         const rows = (Array.isArray(data) ? data : []).filter(row => row && "season" === row.draft_mode);
         body.innerHTML = rows.length ? rows.map(row => `<tr>
@@ -2980,45 +3210,62 @@ function getDerivedAIStrength(clubId) {
           <td>${ordinal(row.final_position)}<\/td>
           <td>${Math.round(+row.points || 0)}<\/td>
           <td>${+row.goal_difference > 0 ? "+" : ""}${Math.round(+row.goal_difference || 0)}<\/td>
-        <\/tr>`).join("") : '<tr><td colspan="10" class="empty">No global scores in this period yet.<\/td><\/tr>';
-
-        const myRankNode =
-          document.getElementById(
-            "myGlobalRank"
-          );
-
-        if (
-          SERVER_DAILY_ENABLED &&
-          myRankNode
-        ) {
-          const rankResult =
-            await onlineClient.rpc(
-              "get_my_global_leaderboard_rank",
-              {
-                p_period:
-                  globalLeaderboardPeriod
-              }
-            );
-
-          if (rankResult.error) {
-            myRankNode.textContent =
-              "Your rank is temporarily unavailable."
-          } else {
-            const rank =
-              rankResult.data || {};
-
-            myRankNode.textContent =
-              rank.hasScore
-                ? `Your rank: ${rank.rankLabel} · Best score: ${Math.round(+(
-                    rank.bestScore &&
-                    rank.bestScore.score
-                  ) || 0).toLocaleString()}`
-                : "Your rank: Unranked"
-          }
-        }
+        <\/tr>`).join("") : '<tr><td colspan="10" class="empty">No global scores in this period yet.<\/td><\/tr>'
       } catch (error) {
         console.warn("Could not load global leaderboard.", error);
-        body.innerHTML = '<tr><td colspan="10" class="empty">Global leaderboard unavailable. Local records still work normally.<\/td><\/tr>'
+        body.innerHTML = '<tr><td colspan="10" class="empty">Global leaderboard unavailable. Local records still work normally.<\/td><\/tr>';
+        if (myRankNode) {
+          myRankNode.textContent = onlineFailureMessage(
+            error,
+            "Your rank is temporarily unavailable."
+          )
+        }
+        return
+      }
+
+      if (!myRankNode) return;
+      await initializeOnlineBackend();
+      if (!onlineUser) {
+        myRankNode.textContent =
+          "Start or resume secure gameplay to view your rank.";
+        return
+      }
+
+      if (!SERVER_DAILY_ENABLED) {
+        myRankNode.textContent =
+          "Standard Season leaderboard loaded.";
+        return
+      }
+
+      try {
+        const rankResult = await withTimeout(
+          onlineClient.rpc(
+            "get_my_global_leaderboard_rank",
+            {
+              p_period:
+                globalLeaderboardPeriod
+            }
+          ),
+          PERSONAL_RPC_TIMEOUT_MS,
+          "Personal Standard rank"
+        );
+
+        if (rankResult.error) throw rankResult.error;
+        const rank = rankResult.data || {};
+        myRankNode.textContent =
+          rank.hasScore
+            ? `Your rank: ${rank.rankLabel} · Best score: ${Math.round(+(
+                rank.bestScore &&
+                rank.bestScore.score
+              ) || 0).toLocaleString()}`
+            : "Your rank: Unranked"
+      } catch (error) {
+        console.warn("Could not load personal Standard rank.", error);
+        myRankNode.textContent =
+          onlineFailureMessage(
+            error,
+            "Your rank is temporarily unavailable."
+          )
       }
     }
 
@@ -3073,7 +3320,7 @@ function getDerivedAIStrength(clubId) {
         tabs.style.display = "none";
         rankNode.textContent =
           "official" === run.dailyAttemptType
-            ? "Loading your Daily rank…"
+            ? "Checking for an existing player session…"
             : "This Practice run does not enter the leaderboard. Today’s eligible scores are shown below.";
         head.innerHTML =
           "<tr><th>#</th><th>Team</th><th>Score</th><th>Attempt</th><th>Difficulty</th><th>OVR</th><th>Finish</th><th>Pts</th><th>GD</th></tr>";
@@ -3081,16 +3328,18 @@ function getDerivedAIStrength(clubId) {
           '<tr><td colspan="9" class="empty">Loading today’s Daily scores…<\/td><\/tr>';
 
         try {
-          await initializeOnlineBackend();
-
-          const boardResult =
-            await onlineClient.rpc(
-              "get_daily_leaderboard_v1",
-              {
-                p_challenge_date:
-                  run.dailyChallengeDate || null,
-                p_limit: 100
-              }
+          const publicClient = initializePublicOnlineBackend(),
+            boardResult = await withTimeout(
+              publicClient.rpc(
+                "get_daily_leaderboard_v1",
+                {
+                  p_challenge_date:
+                    run.dailyChallengeDate || null,
+                  p_limit: 100
+                }
+              ),
+              PUBLIC_RPC_TIMEOUT_MS,
+              "Season Review Daily leaderboard"
             );
 
           if (boardResult.error) throw boardResult.error;
@@ -3113,22 +3362,46 @@ function getDerivedAIStrength(clubId) {
                   <td>${Math.round(+row.points || 0)}<\/td>
                   <td>${+row.goal_difference > 0 ? "+" : ""}${Math.round(+row.goal_difference || 0)}<\/td>
                 <\/tr>`).join("")
-              : '<tr><td colspan="9" class="empty">No eligible Daily scores have been completed yet.<\/td><\/tr>';
-
+              : '<tr><td colspan="9" class="empty">No eligible Daily scores have been completed yet.<\/td><\/tr>'
+        } catch (error) {
+          console.warn(
+            "Could not load the Season Review Daily leaderboard.",
+            error
+          );
+          body.innerHTML =
+            '<tr><td colspan="9" class="empty">Daily leaderboard unavailable.<\/td><\/tr>';
           if ("official" === run.dailyAttemptType) {
-            const rankResult =
-              await onlineClient.rpc(
+            rankNode.textContent = onlineFailureMessage(
+              error,
+              "Your Daily rank is temporarily unavailable."
+            )
+          }
+          return
+        }
+
+        if ("official" === run.dailyAttemptType) {
+          await initializeOnlineBackend();
+          if (!onlineUser) {
+            rankNode.textContent =
+              "Start or resume secure gameplay to view your Daily rank.";
+            return
+          }
+
+          try {
+            const rankResult = await withTimeout(
+              onlineClient.rpc(
                 "get_my_daily_leaderboard_rank",
                 {
                   p_challenge_date:
                     run.dailyChallengeDate || null
                 }
-              );
+              ),
+              PERSONAL_RPC_TIMEOUT_MS,
+              "Season Review personal Daily rank"
+            );
 
             if (rankResult.error) throw rankResult.error;
-
             const rank = rankResult.data || {};
-
             rankNode.textContent =
               rank.hasScore
                 ? `Your Daily rank: ${rank.rankLabel} · Best score: ${Math.round(+(
@@ -3139,17 +3412,12 @@ function getDerivedAIStrength(clubId) {
                     rank.bestScore.leaderboardAttemptNumber
                   ) || 0)} / 3`
                 : "Your Daily rank: Unranked"
-          }
-        } catch (error) {
-          console.warn(
-            "Could not load the Season Review Daily leaderboard.",
-            error
-          );
-          body.innerHTML =
-            '<tr><td colspan="9" class="empty">Daily leaderboard unavailable.<\/td><\/tr>';
-          if ("official" === run.dailyAttemptType) {
-            rankNode.textContent =
+          } catch (error) {
+            console.warn("Could not load the Season Review personal Daily rank.", error);
+            rankNode.textContent = onlineFailureMessage(
+              error,
               "Your Daily rank is temporarily unavailable."
+            )
           }
         }
 
@@ -3172,23 +3440,25 @@ function getDerivedAIStrength(clubId) {
       body.innerHTML =
         '<tr><td colspan="10" class="empty">Loading Standard Season scores…<\/td><\/tr>';
       rankNode.textContent =
-        "Loading your Standard Season rank…";
+        "Checking for an existing player session…";
 
       try {
-        await initializeOnlineBackend();
-
-        const boardResult =
-          await onlineClient.rpc(
-            SERVER_DAILY_ENABLED
-              ? "get_global_leaderboard_v2"
-              : "get_global_leaderboard",
-            {
-              p_period: reviewLeaderboardPeriod,
-              p_limit:
-                SERVER_DAILY_ENABLED
-                  ? 100
-                  : 10
-            }
+        const publicClient = initializePublicOnlineBackend(),
+          boardResult = await withTimeout(
+            publicClient.rpc(
+              SERVER_DAILY_ENABLED
+                ? "get_global_leaderboard_v2"
+                : "get_global_leaderboard",
+              {
+                p_period: reviewLeaderboardPeriod,
+                p_limit:
+                  SERVER_DAILY_ENABLED
+                    ? 100
+                    : 10
+              }
+            ),
+            PUBLIC_RPC_TIMEOUT_MS,
+            "Season Review Standard leaderboard"
           );
 
         if (boardResult.error) throw boardResult.error;
@@ -3218,33 +3488,7 @@ function getDerivedAIStrength(clubId) {
                 <td>${Math.round(+row.points || 0)}<\/td>
                 <td>${+row.goal_difference > 0 ? "+" : ""}${Math.round(+row.goal_difference || 0)}<\/td>
               <\/tr>`).join("")
-            : '<tr><td colspan="10" class="empty">No Standard Season scores in this period yet.<\/td><\/tr>';
-
-        if (SERVER_DAILY_ENABLED) {
-          const rankResult =
-            await onlineClient.rpc(
-              "get_my_global_leaderboard_rank",
-              {
-                p_period:
-                  reviewLeaderboardPeriod
-              }
-            );
-
-          if (rankResult.error) throw rankResult.error;
-
-          const rank = rankResult.data || {};
-
-          rankNode.textContent =
-            rank.hasScore
-              ? `Your rank: ${rank.rankLabel} · Best score: ${Math.round(+(
-                  rank.bestScore &&
-                  rank.bestScore.score
-                ) || 0).toLocaleString()}`
-              : "Your rank: Unranked"
-        } else {
-          rankNode.textContent =
-            "Standard Season leaderboard loaded."
-        }
+            : '<tr><td colspan="10" class="empty">No Standard Season scores in this period yet.<\/td><\/tr>'
       } catch (error) {
         console.warn(
           "Could not load the Season Review Standard leaderboard.",
@@ -3252,8 +3496,54 @@ function getDerivedAIStrength(clubId) {
         );
         body.innerHTML =
           '<tr><td colspan="10" class="empty">Standard Season leaderboard unavailable.<\/td><\/tr>';
-        rankNode.textContent =
+        rankNode.textContent = onlineFailureMessage(
+          error,
           "Your rank is temporarily unavailable."
+        );
+        return
+      }
+
+      await initializeOnlineBackend();
+      if (!onlineUser) {
+        rankNode.textContent =
+          "Start or resume secure gameplay to view your rank.";
+        return
+      }
+
+      if (!SERVER_DAILY_ENABLED) {
+        rankNode.textContent =
+          "Standard Season leaderboard loaded.";
+        return
+      }
+
+      try {
+        const rankResult = await withTimeout(
+          onlineClient.rpc(
+            "get_my_global_leaderboard_rank",
+            {
+              p_period:
+                reviewLeaderboardPeriod
+            }
+          ),
+          PERSONAL_RPC_TIMEOUT_MS,
+          "Season Review personal Standard rank"
+        );
+
+        if (rankResult.error) throw rankResult.error;
+        const rank = rankResult.data || {};
+        rankNode.textContent =
+          rank.hasScore
+            ? `Your rank: ${rank.rankLabel} · Best score: ${Math.round(+(
+                rank.bestScore &&
+                rank.bestScore.score
+              ) || 0).toLocaleString()}`
+            : "Your rank: Unranked"
+      } catch (error) {
+        console.warn("Could not load the Season Review personal Standard rank.", error);
+        rankNode.textContent = onlineFailureMessage(
+          error,
+          "Your rank is temporarily unavailable."
+        )
       }
     }
 
@@ -4314,7 +4604,7 @@ function buildDailyChallenge() {
       showSecureSeasonRecoveryModal();
 
       try {
-        await initializeOnlineBackend();
+        await ensureAuthenticatedOnlineBackend();
 
         const { data, error } =
           await onlineClient.functions.invoke(
@@ -4472,7 +4762,7 @@ function buildDailyChallenge() {
       d("dailyRunChoiceModal");
 
       try {
-        await initializeOnlineBackend();
+        await ensureAuthenticatedOnlineBackend();
 
         if (
           !completed &&
@@ -5500,7 +5790,7 @@ const allClubNames =
       );
 
       try {
-        await initializeOnlineBackend();
+        await ensureAuthenticatedOnlineBackend();
 
         const { data, error } =
           await onlineClient.functions.invoke(
@@ -5757,7 +6047,7 @@ const allClubNames =
       X(!1);
 
       try {
-        await initializeOnlineBackend();
+        await ensureAuthenticatedOnlineBackend();
 
         const { data, error } =
           await onlineClient.functions.invoke(
@@ -6136,7 +6426,7 @@ const allClubNames =
         "Starting secure Daily…";
 
       try {
-        await initializeOnlineBackend();
+        await ensureAuthenticatedOnlineBackend({ createAnonymous: !0 });
 
         const { data, error } =
           await onlineClient.functions.invoke(
@@ -6220,7 +6510,7 @@ const allClubNames =
       ) return !1;
 
       try {
-        await initializeOnlineBackend();
+        await ensureAuthenticatedOnlineBackend();
 
         const { data, error } =
           await onlineClient.functions.invoke(
@@ -6346,7 +6636,7 @@ const allClubNames =
       if (!marker || !marker.serverRunId) return !1;
 
       try {
-        await initializeOnlineBackend();
+        await ensureAuthenticatedOnlineBackend();
 
         const { data, error } =
           await onlineClient.functions.invoke(
@@ -6379,7 +6669,6 @@ const allClubNames =
           error
         );
 
-        clearSecureDraftResumeMarker();
         return !1
       }
     }
@@ -6426,7 +6715,7 @@ const allClubNames =
       showResumeDraftChoiceError("");
 
       try {
-        await initializeOnlineBackend();
+        await ensureAuthenticatedOnlineBackend();
 
         const { data, error } =
           await onlineClient.functions.invoke(
@@ -7507,7 +7796,7 @@ function S(t, s) {
           : "Preparing season…";
 
       try {
-        await initializeOnlineBackend();
+        await ensureAuthenticatedOnlineBackend();
 
         const { data, error } =
           await onlineClient.functions.invoke(
@@ -7610,7 +7899,7 @@ function S(t, s) {
       );
 
       try {
-        await initializeOnlineBackend();
+        await ensureAuthenticatedOnlineBackend();
 
         const { data, error } =
           await onlineClient.functions.invoke(
@@ -7833,7 +8122,7 @@ function skipSeasonFlow() {
       showSecureSeasonRecoveryModal();
 
       try {
-        await initializeOnlineBackend();
+        await ensureAuthenticatedOnlineBackend();
 
         const { data, error } =
           await onlineClient.functions.invoke(
@@ -8633,7 +8922,9 @@ xt("dailyStartBtn").addEventListener("click", async () => {
     document.documentElement.dataset.phase6Build =
       PHASE6_BUILD;
     initializeOnlineBackend().then(async () => {
-      renderGlobalLeaderboard();
+      if (!onlineUser) return;
+
+      await flushPendingOnlineSubmissions();
 
       if (DRAFT_SERVER_MODE_ENABLED) {
         const seasonMarker =
