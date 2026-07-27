@@ -7926,6 +7926,11 @@ function S(t, s) {
           data.state
         );
 
+        if (data.finished === true) {
+          Ct.serverFinalResult =
+            data.state.result || null
+        }
+
         const serverMatchday =
             +data.state.currentMatchday || 0;
 
@@ -7944,7 +7949,10 @@ function S(t, s) {
           )
         }
 
-        if (34 === serverMatchday) {
+        if (
+          34 === serverMatchday &&
+          data.finished !== true
+        ) {
           await finishSecureServerSeason()
         }
 
@@ -7992,28 +8000,119 @@ function S(t, s) {
         Ct.serverActionPending
       ) return;
 
+      const expectedMatchday = Ct.md;
+
       xt("skipEndBtn").textContent =
         "Skipping…";
 
-      while (
-        Ct &&
-        Ct.serverMode &&
-        !Ct.done &&
-        Ct.md < 34
-      ) {
-        const worked =
-          await revealSecureServerMatchday(
-            !1,
-            !0
+      setSecureSeasonBusy(
+        !0,
+        `Skipping… ${expectedMatchday + 1}/34`
+      );
+
+      try {
+        await ensureAuthenticatedOnlineBackend();
+
+        const { data, error } =
+          await onlineClient.functions.invoke(
+            "skip-season",
+            {
+              body: {
+                runId: Ct.serverRunId,
+                expectedMatchday
+              }
+            }
           );
 
-        if (!worked) break
-      }
+        if (error) throw error;
 
-      if (Ct && !Ct.done) {
-        xt("skipEndBtn").textContent =
-          "Skip To End";
-        setSecureSeasonBusy(!1)
+        if (
+          !data ||
+          !data.ok ||
+          !data.state ||
+          !Array.isArray(data.revealedMatchdays)
+        ) {
+          throw new Error(
+            data &&
+            data.errorCode ||
+            "SKIP_SEASON_REJECTED"
+          )
+        }
+
+        applyTrustedPlayerStatsState(
+          data.state
+        );
+
+        Ct.serverFinalResult =
+          data.state.result || null;
+
+        for (
+          const matchday of
+          data.revealedMatchdays
+        ) {
+          const serverMatchday =
+              +matchday.matchday || 0,
+            expectedNext = Ct.md + 1;
+
+          if (serverMatchday <= Ct.md) {
+            continue
+          }
+
+          if (serverMatchday !== expectedNext) {
+            throw new Error(
+              "SKIP_MATCHDAY_SEQUENCE_MISMATCH"
+            )
+          }
+
+          const localMatches =
+            safeServerMatchdayToLocal(
+              matchday
+            );
+
+          if (!localMatches) {
+            throw new Error(
+              "SKIP_MATCHDAY_PAYLOAD_MISSING"
+            )
+          }
+
+          Ct.plannedResults[Ct.md] =
+            localMatches.map(match => ({
+              h: match.h,
+              a: match.a,
+              score: [
+                match.score[0],
+                match.score[1]
+              ]
+            }));
+
+          A(!1)
+        }
+
+        if (!Ct.done && Ct.md === 34) {
+          throw new Error(
+            "SKIP_FINAL_UI_NOT_COMPLETED"
+          )
+        }
+
+        if (Ct.done) {
+          clearSecureSeasonResumeMarker()
+        }
+      } catch (error) {
+        console.warn(
+          "Could not skip secure season.",
+          error
+        );
+
+        setDraftBackendStatus(
+          "error",
+          "The season could not be skipped right now. Your progress is safely saved."
+        )
+      } finally {
+        if (Ct && !Ct.done) {
+          xt("skipEndBtn").textContent =
+            "Skip To End";
+          setSecureSeasonBusy(!1)
+        }
       }
     }
 
