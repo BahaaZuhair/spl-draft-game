@@ -1,6 +1,50 @@
 
 (async () => {
   try {
+    const ADSENSE_SCRIPT_ID = "spldraft-adsense-script";
+
+    function loadAdsenseScript() {
+      if (
+        document.getElementById(ADSENSE_SCRIPT_ID) ||
+        document.querySelector(
+          'script[src*="pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"]'
+        )
+      ) {
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.id = ADSENSE_SCRIPT_ID;
+      script.async = true;
+      script.crossOrigin = "anonymous";
+      script.src =
+        "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4719862642022309";
+      document.head.appendChild(script);
+    }
+
+    function scheduleAdsenseLoad() {
+      const queueLoad = () => {
+        if ("requestIdleCallback" in window) {
+          window.requestIdleCallback(loadAdsenseScript, {
+            timeout: 2000,
+          });
+          return;
+        }
+
+        window.setTimeout(loadAdsenseScript, 500);
+      };
+
+      if (document.readyState === "complete") {
+        queueLoad();
+      } else {
+        window.addEventListener("load", queueLoad, {
+          once: true,
+        });
+      }
+    }
+
+    scheduleAdsenseLoad();
+
     const PHASE6_NO_DATABASE_BUILD = !0,
       PHASE6_BUILD =
         "arabic-design-final-2026-07-19",
@@ -1807,7 +1851,8 @@ function getDerivedAIStrength(clubId) {
     }
 
     let turnstileWidgetId = null,
-      turnstileTokenPromise = null;
+      turnstileTokenPromise = null,
+      turnstileScriptPromise = null;
 
     function updateTurnstileGate(message, state = "checking") {
       const gate = document.getElementById("turnstileGate"),
@@ -1840,6 +1885,52 @@ function getDerivedAIStrength(clubId) {
       turnstileWidgetId = null;
       const container = document.getElementById("turnstileWidget");
       if (container) container.replaceChildren()
+    }
+
+    function ensureTurnstileScriptLoaded() {
+      if (
+        window.turnstile &&
+        "function" === typeof window.turnstile.render
+      ) {
+        return Promise.resolve(window.turnstile);
+      }
+
+      if (turnstileScriptPromise) {
+        return turnstileScriptPromise;
+      }
+
+      turnstileScriptPromise = new Promise((resolve, reject) => {
+        const existing = document.querySelector(
+          'script[data-spl-turnstile="true"]'
+        );
+
+        const finish = () => resolve(window.turnstile || null);
+        const fail = () => reject(
+          new Error("Cloudflare security-check script could not load")
+        );
+
+        if (existing) {
+          existing.addEventListener("load", finish, { once: true });
+          existing.addEventListener("error", fail, { once: true });
+          return;
+        }
+
+        const script = document.createElement("script");
+        script.dataset.splTurnstile = "true";
+        script.src =
+          "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+        script.async = true;
+        script.defer = true;
+        script.referrerPolicy = "no-referrer";
+        script.addEventListener("load", finish, { once: true });
+        script.addEventListener("error", fail, { once: true });
+        document.head.appendChild(script);
+      }).catch(error => {
+        turnstileScriptPromise = null;
+        throw error;
+      });
+
+      return turnstileScriptPromise;
     }
 
     function createClientTimeoutError(label) {
@@ -1899,7 +1990,9 @@ function getDerivedAIStrength(clubId) {
       return "The request timed out or the server is busy. Please retry manually in a moment."
     }
 
-    function waitForTurnstileApi() {
+    async function waitForTurnstileApi() {
+      await ensureTurnstileScriptLoaded();
+
       return new Promise((resolve, reject) => {
         const startedAt = Date.now(),
           check = () => {
@@ -1910,6 +2003,32 @@ function getDerivedAIStrength(clubId) {
         check()
       })
     }
+
+    function prewarmTurnstileOnPlayerIntent() {
+      const warm = () => {
+        ensureTurnstileScriptLoaded().catch(() => {});
+      };
+
+      [
+        "teamNameInput",
+        "menuStartBtn",
+        "dailyChallengeBtn",
+        "headerLeaderboardBtn",
+      ].forEach(id => {
+        const element = document.getElementById(id);
+        if (!element) return;
+
+        element.addEventListener("pointerdown", warm, {
+          once: true,
+          passive: true,
+        });
+        element.addEventListener("focus", warm, {
+          once: true,
+        });
+      });
+    }
+
+    prewarmTurnstileOnPlayerIntent();
 
     async function requestAnonymousSignInCaptchaToken() {
       if (turnstileTokenPromise) return turnstileTokenPromise;
