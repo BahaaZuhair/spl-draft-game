@@ -5,18 +5,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="google-adsense-account" content="ca-pub-4719862642022309">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; script-src 'self' https://cdn.jsdelivr.net https://challenges.cloudflare.com https://pagead2.googlesyndication.com https://www.googletagmanager.com 'sha256-VBpGVsMcdOYF7rO3Fe9KOBSC8eFBj0WRVbyqjotsH+U='; script-src-attr 'none'; style-src 'self' https://fonts.googleapis.com; style-src-elem 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src https://fonts.gstatic.com; connect-src 'self' https://wyxtriciyixkglcrppgh.supabase.co wss://wyxtriciyixkglcrppgh.supabase.co https://challenges.cloudflare.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com; img-src 'self' data:; media-src 'none'; frame-src https://challenges.cloudflare.com; worker-src 'none'; manifest-src 'self'; form-action 'self'; upgrade-insecure-requests">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; script-src 'self' https://cdn.jsdelivr.net https://challenges.cloudflare.com https://pagead2.googlesyndication.com https://www.googletagmanager.com https://fundingchoicesmessages.google.com 'sha256-VBpGVsMcdOYF7rO3Fe9KOBSC8eFBj0WRVbyqjotsH+U='; script-src-attr 'none'; style-src 'self' https://fonts.googleapis.com; style-src-elem 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src https://fonts.gstatic.com; connect-src 'self' https://wyxtriciyixkglcrppgh.supabase.co wss://wyxtriciyixkglcrppgh.supabase.co https://challenges.cloudflare.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com; img-src 'self' data:; media-src 'none'; frame-src https://challenges.cloudflare.com https://fundingchoicesmessages.google.com; worker-src 'none'; manifest-src 'self'; form-action 'self'; upgrade-insecure-requests">
 <title>SPL Draft — الدوري السعودي</title>
+<meta name="description" content="Draft a Saudi Pro League XI from 26 seasons and take it through a full campaign. كوّن فريقك من 26 موسمًا وخض موسم الدوري كاملًا.">
+<meta name="theme-color" content="#0A1611">
+<link rel="icon" href="./favicon.ico" sizes="any">
 
 
 
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://wyxtriciyixkglcrppgh.supabase.co" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700&family=Noto+Kufi+Arabic:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./styles.css" integrity="sha384-4wTUu+98ZEdOVmHAi7OxjZjQxwZdZQkZpm930ERrF01D4/1IrcdHiD/ocJWfVS/y" crossorigin="anonymous">
+<link rel="stylesheet" href="./styles.css?v=mobile-hotfix-2-3" integrity="sha384-4wTUu+98ZEdOVmHAi7OxjZjQxwZdZQkZpm930ERrF01D4/1IrcdHiD/ocJWfVS/y" crossorigin="anonymous">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700&family=Noto+Kufi+Arabic:wght@400;600&display=swap" rel="stylesheet"></noscript>
 
 
 
@@ -50,7 +51,7 @@
   </svg>
 </button>
 
-<div class="wrap">
+<main class="wrap" id="mainContent">
   <header class="top">
     <div class="brand" data-i18n-skip="true">SPL <span class="gold">Draft</span></div>
     <div class="top-actions">
@@ -254,12 +255,6 @@
       <div class="rate-live">Squad rating so far <b id="liveRate">—</b></div>
     </div>
     <div id="draftBackendStatus" class="draft-backend-status" role="status" aria-live="polite"></div>
-    <div id="draftBackendTools" class="draft-backend-tools">
-      <button class="btn ghost" id="serverRollTestBtn" type="button" disabled>Test Server Roll</button>
-      <button class="btn ghost" id="serverSkipTestBtn" type="button" disabled>Test Server Skip</button>
-      <button class="btn ghost" id="serverSelectTestBtn" type="button" disabled>Test Server Selection</button>
-      <span id="draftBackendDetails" class="draft-backend-details"></span>
-    </div>
     <div class="draft">
       <div class="pitch" id="pitch">
         <svg class="lines" viewBox="0 0 100 139" preserveAspectRatio="none">
@@ -409,7 +404,7 @@
       <div style="display:flex;justify-content:center"><button class="btn" id="restartRunBtn">Restart Run</button></div>
     </div>
   </section>
-</div>
+</main>
 
 <!-- squad summary modal -->
 <div class="modal" id="sumModal">
@@ -540,6 +535,6 @@
 
 <!-- Turnstile is still enabled; app.js loads it only when a player starts interacting. -->
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.5" integrity="sha384-Fntl9b+IRzm2GKZK0c129fQFknWsn8pyxDejLO4wwds1LF9DSob2K2QXlfw8EIXn" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script defer src="./app.js?v=mobile-speed-hotfix-1" integrity="sha384-hSj6wWbwR04sZJ9tNtpD54Rz3clE9TKJKX/qWTaphxh57tjXweshIZ5n0WESJ7aK" crossorigin="anonymous"></script>
+<script defer src="./app.js?v=mobile-hotfix-2-3" integrity="sha384-8CGlrDRqgk8A3KjH6w4Izenqj5Im0XclP3uZS2UibSGoFsit+JU0D6zb3JnQA8GM" crossorigin="anonymous"></script>
 </body>
 </html>

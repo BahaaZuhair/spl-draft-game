@@ -1,6 +1,57 @@
 
 (async () => {
   try {
+    const GOOGLE_FONTS_STYLESHEET_ID = "spldraft-google-fonts";
+    const GOOGLE_FONTS_STYLESHEET_URL =
+      "https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700&family=Noto+Kufi+Arabic:wght@400;600&display=swap";
+
+    function loadGoogleFontsStylesheet() {
+      if (
+        document.getElementById(GOOGLE_FONTS_STYLESHEET_ID) ||
+        document.querySelector('link[href*="fonts.googleapis.com/css2"]')
+      ) {
+        return;
+      }
+
+      if (!document.querySelector('link[data-spl-font-preconnect="true"]')) {
+        const preconnect = document.createElement("link");
+        preconnect.rel = "preconnect";
+        preconnect.href = "https://fonts.gstatic.com";
+        preconnect.crossOrigin = "anonymous";
+        preconnect.dataset.splFontPreconnect = "true";
+        document.head.appendChild(preconnect);
+      }
+
+      const stylesheet = document.createElement("link");
+      stylesheet.id = GOOGLE_FONTS_STYLESHEET_ID;
+      stylesheet.rel = "stylesheet";
+      stylesheet.href = GOOGLE_FONTS_STYLESHEET_URL;
+      document.head.appendChild(stylesheet);
+    }
+
+    function scheduleGoogleFontsLoad() {
+      const queueLoad = () => {
+        if ("requestIdleCallback" in window) {
+          window.requestIdleCallback(loadGoogleFontsStylesheet, {
+            timeout: 900,
+          });
+          return;
+        }
+
+        window.setTimeout(loadGoogleFontsStylesheet, 150);
+      };
+
+      if (document.readyState === "complete") {
+        queueLoad();
+      } else {
+        window.addEventListener("load", queueLoad, {
+          once: true,
+        });
+      }
+    }
+
+    scheduleGoogleFontsLoad();
+
     const ADSENSE_SCRIPT_ID = "spldraft-adsense-script";
 
     function loadAdsenseScript() {
@@ -1111,9 +1162,6 @@ function getDerivedAIStrength(clubId) {
         "See your final position, season record, league table, squad statistics, awards and a season-review article. Restart Run starts a fresh draft any time.": "شاهد مركزك النهائي وسجل الموسم والجدول وإحصائيات التشكيلة والجوائز وتقرير الموسم. وتقدر تبدأ درافت جديد بأي وقت.",
         "Connecting to the online leaderboard…": "جاري الاتصال بلوحة الصدارة…",
         "Connecting to today’s Daily leaderboard…": "جاري الاتصال بترتيب تحدي اليوم…",
-        "Test Server Roll": "اختبار لفة السيرفر",
-        "Test Server Skip": "اختبار تخطّي السيرفر",
-        "Test Server Selection": "اختبار اختيار السيرفر",
         "P": "لعب",
         "W": "ف",
         "D": "ت",
@@ -9193,7 +9241,7 @@ xt("dailyStartBtn").addEventListener("click", async () => {
     initializeBrowserBackNavigation();
     xt("homeBtn").addEventListener("click", event => handleGlobalHome(event.currentTarget)), xt("draftRestartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartRunBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("scoreRestartBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("restartCtlBtn").addEventListener("click", t => m("Restart this run?", $t, "Restart Run", c, t.currentTarget)), xt("navCancel").addEventListener("click", () => W(!1)), xt("navConfirm").addEventListener("click", () => W(!0)), xt("navModal").addEventListener("keydown", t => {
       "Escape" === t.key && W(!1)
-    }), xt("rollBtn").addEventListener("click", () => z(!1)), xt("skipBtn").addEventListener("click", () => z(!0)), document.getElementById("serverRollTestBtn").addEventListener("click", runServerRouletteShadowTest), document.getElementById("serverSkipTestBtn").addEventListener("click", runServerSkipShadowTest), document.getElementById("serverSelectTestBtn").addEventListener("click", runServerSelectionShadowTest), xt("startSimBtn").addEventListener("click", startSeasonFlow), xt("editPosBtn").addEventListener("click", () => {
+    }), xt("rollBtn").addEventListener("click", () => z(!1)), xt("skipBtn").addEventListener("click", () => z(!0)), document.getElementById("serverRollTestBtn")?.addEventListener("click", runServerRouletteShadowTest), document.getElementById("serverSkipTestBtn")?.addEventListener("click", runServerSkipShadowTest), document.getElementById("serverSelectTestBtn")?.addEventListener("click", runServerSelectionShadowTest), xt("startSimBtn").addEventListener("click", startSeasonFlow), xt("editPosBtn").addEventListener("click", () => {
       F(), d("sumModal"), xt("openSummaryBtn").style.display = "inline-block"
     }), xt("openSummaryBtn").addEventListener("click", g), xt("swapCancel").addEventListener("click", () => d("swapModal")), xt("nextMdBtn").addEventListener("click", playNextSeasonFlow), xt("skipEndBtn").addEventListener("click", skipSeasonFlow)
   } catch (rs) {
