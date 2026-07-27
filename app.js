@@ -1180,7 +1180,7 @@ function getDerivedAIStrength(clubId) {
         "Champions List": "قائمة الأبطال",
         "Only players who finish a Standard Season with a perfect 34–0–0 record are added here. This is the ultimate way to win SPL Draft.": "لا يُضاف هنا إلا من ينهي الموسم العادي بسجل مثالي 34–0–0. هذا هو الفوز النهائي في SPL Draft.",
         "34 wins · 0 draws · 0 losses": "34 فوز · 0 تعادل · 0 خسارة",
-        "Ranked by goal difference, goals scored, goals conceded, then earliest completion.": "الترتيب حسب فارق الأهداف، ثم الأهداف المسجلة، ثم الأقل استقبالاً، ثم الأسبق تحقيقاً.",
+        "Ranked by rating. Ties are broken by goal difference, goals scored, goals conceded, then earliest completion.": "الترتيب حسب التقييم، وعند التعادل يُحسم بفارق الأهداف، ثم الأهداف المسجلة، ثم الأقل استقبالاً، ثم الأسبق تحقيقاً.",
         "Connecting to the Champions List…": "جاري الاتصال بقائمة الأبطال…",
         "Win SPL Draft: finish the season 34–0–0.": "للفوز في SPL Draft: أنهِ الموسم بسجل 34–0–0.",
         "Perfect-season winners enter the Champions List.": "أصحاب الموسم المثالي يدخلون قائمة الأبطال.",
@@ -3359,8 +3359,8 @@ function getDerivedAIStrength(clubId) {
       panel.style.display = "";
       badge.textContent = isArabicUi() ? "الأبطال" : "Champions";
       body.innerHTML = isArabicUi()
-        ? '<tr><td colspan="9" class="empty">جاري تحميل قائمة الأبطال…<\/td><\/tr>'
-        : '<tr><td colspan="9" class="empty">Loading the Champions List…<\/td><\/tr>';
+        ? '<tr><td colspan="10" class="empty">جاري تحميل قائمة الأبطال…<\/td><\/tr>'
+        : '<tr><td colspan="10" class="empty">Loading the Champions List…<\/td><\/tr>';
       rankNode.textContent = isArabicUi()
         ? "جاري التحقق من ترتيبك في قائمة الأبطال…"
         : "Checking your Champions List rank…";
@@ -3388,6 +3388,7 @@ function getDerivedAIStrength(clubId) {
           ? rows.map(row => `<tr>
               <td>${Math.round(+row.rank || 0)}<\/td>
               <td>${escapeHtml(row.display_name || "Anonymous")}<\/td>
+              <td class="scorecell">${Math.round(+row.score || 0).toLocaleString()}<\/td>
               <td><span class="champion-record">34–0–0<\/span><\/td>
               <td>${Math.round(+row.goals_for || 0)}<\/td>
               <td>${Math.round(+row.goals_against || 0)}<\/td>
@@ -3397,13 +3398,13 @@ function getDerivedAIStrength(clubId) {
               <td>${escapeHtml(formatRunDate(row.completed_at))}<\/td>
             <\/tr>`).join("")
           : isArabicUi()
-            ? '<tr><td colspan="9" class="empty">لم يحقق أي لاعب موسم 34–0–0 حتى الآن.<\/td><\/tr>'
-            : '<tr><td colspan="9" class="empty">No player has completed a 34–0–0 season yet.<\/td><\/tr>';
+            ? '<tr><td colspan="10" class="empty">لم يحقق أي لاعب موسم 34–0–0 حتى الآن.<\/td><\/tr>'
+            : '<tr><td colspan="10" class="empty">No player has completed a 34–0–0 season yet.<\/td><\/tr>';
       } catch (error) {
         console.warn("Could not load Champions List.", error);
         body.innerHTML = isArabicUi()
-          ? '<tr><td colspan="9" class="empty">قائمة الأبطال غير متاحة مؤقتاً.<\/td><\/tr>'
-          : '<tr><td colspan="9" class="empty">Champions List temporarily unavailable.<\/td><\/tr>';
+          ? '<tr><td colspan="10" class="empty">قائمة الأبطال غير متاحة مؤقتاً.<\/td><\/tr>'
+          : '<tr><td colspan="10" class="empty">Champions List temporarily unavailable.<\/td><\/tr>';
         rankNode.textContent = onlineFailureMessage(
           error,
           isArabicUi()
@@ -3435,8 +3436,8 @@ function getDerivedAIStrength(clubId) {
 
         rankNode.textContent = rank.hasScore
           ? isArabicUi()
-            ? `ترتيبك في قائمة الأبطال: ${rank.rankLabel || "—"} · أفضل موسم: ${Math.round(+best.goalsFor || 0)} له، ${Math.round(+best.goalsAgainst || 0)} عليه، فارق ${+best.goalDifference > 0 ? "+" : ""}${Math.round(+best.goalDifference || 0)}`
-            : `Your Champions List rank: ${rank.rankLabel || "—"} · Best perfect season: ${Math.round(+best.goalsFor || 0)} GF, ${Math.round(+best.goalsAgainst || 0)} GA, ${+best.goalDifference > 0 ? "+" : ""}${Math.round(+best.goalDifference || 0)} GD`
+            ? `ترتيبك في قائمة الأبطال: ${rank.rankLabel || "—"} · التقييم: ${Math.round(+best.score || 0).toLocaleString()} · أفضل موسم: ${Math.round(+best.goalsFor || 0)} له، ${Math.round(+best.goalsAgainst || 0)} عليه، فارق ${+best.goalDifference > 0 ? "+" : ""}${Math.round(+best.goalDifference || 0)}`
+            : `Your Champions List rank: ${rank.rankLabel || "—"} · Rating: ${Math.round(+best.score || 0).toLocaleString()} · Best perfect season: ${Math.round(+best.goalsFor || 0)} GF, ${Math.round(+best.goalsAgainst || 0)} GA, ${+best.goalDifference > 0 ? "+" : ""}${Math.round(+best.goalDifference || 0)} GD`
           : isArabicUi()
             ? "غير مصنف بعد · حقق 34–0–0 لتفوز باللعبة وتدخل قائمة الأبطال."
             : "Unranked · Finish 34–0–0 to win the game and enter the Champions List.";
