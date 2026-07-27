@@ -16,7 +16,7 @@
 
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://wyxtriciyixkglcrppgh.supabase.co" crossorigin>
-<link rel="stylesheet" href="./styles.css?v=mobile-hotfix-2-3" integrity="sha384-4wTUu+98ZEdOVmHAi7OxjZjQxwZdZQkZpm930ERrF01D4/1IrcdHiD/ocJWfVS/y" crossorigin="anonymous">
+<link rel="stylesheet" href="./styles.css?v=champions-list-1" integrity="sha384-wze7komYXRtVR9q7CfjQ5AiUw40nKsW0d6a+uS6parfpmcR2yROG/DbBAPkQPP+O" crossorigin="anonymous">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700&family=Noto+Kufi+Arabic:wght@400;600&display=swap" rel="stylesheet"></noscript>
 
 
@@ -83,6 +83,10 @@
           <button class="btn" id="dailyChallengeBtn">Daily Challenge</button>
           <button class="btn ghost" id="howtoBtn">How to Play</button>
         </div>
+        <div class="champions-goal-banner" role="note">
+          <b>Win SPL Draft: finish the season 34–0–0.</b>
+          <span>Perfect-season winners enter the Champions List.</span>
+        </div>
       </div>
     </div>
   </section>
@@ -104,7 +108,7 @@
       <h3>5 · The season</h3>
       <p>Your draft enters the 25/26 league and plays all 34 matchdays. Play game by game or skip to the end. Standings, player stats and awards are tracked throughout.</p>
       <h3>6 · Full time</h3>
-      <p>See your final position, season record, league table, squad statistics, awards and a season-review article. Restart Run starts a fresh draft any time.</p>
+      <p>See your final position, season record, league table, squad statistics, awards and a season-review article. Winning the league is a great result, but the ultimate game victory is a perfect 34–0–0 season, which earns your place in the Champions List. Restart Run starts a fresh draft any time.</p>
     </div>
     <div style="display:flex;justify-content:center;margin-top:16px">
       <button class="btn ghost" id="howtoBackBtn">Back</button>
@@ -167,6 +171,7 @@
       </div>
       <p data-i18n-skip="true" dir="rtl" style="margin:-2px 0 2px;text-align:center">للتواصل : <a data-i18n-skip="true" href="mailto:spldraft@gmail.com">spldraft@gmail.com</a></p>
 
+      <div class="records-duo">
       <div class="panel" id="dailyLeaderboardPanel">
         <div class="records-section-head">
           <div>
@@ -185,6 +190,30 @@
             <tbody id="dailyLeaderboardBody"><tr><td colspan="9" class="empty">Connecting to today’s Daily leaderboard…</td></tr></tbody>
           </table>
         </div>
+      </div>
+      <div class="panel champions-panel" id="championsLeaderboardPanel">
+        <div class="records-section-head">
+          <div>
+            <div class="h2">Champions List</div>
+            <p>Only players who finish a Standard Season with a perfect 34–0–0 record are added here. This is the ultimate way to win SPL Draft.</p>
+          </div>
+          <div class="online-tools">
+            <span class="badge online-state champions-badge" id="championsLeaderboardStatusBadge">Champions</span>
+            <button class="btn ghost sm" id="refreshChampionsLeaderboardBtn" type="button">Refresh</button>
+          </div>
+        </div>
+        <div class="champions-rule" role="note">
+          <b>34 wins · 0 draws · 0 losses</b>
+          <span>Ranked by goal difference, goals scored, goals conceded, then earliest completion.</span>
+        </div>
+        <div class="tablewrap local-table champions-table" style="margin-top:12px">
+          <div id="myChampionsRank" class="resume-draft-note" style="margin:0 0 10px"></div>
+          <table class="lg">
+            <thead><tr><th>#</th><th>Team</th><th>Record</th><th>GF</th><th>GA</th><th>GD</th><th>Difficulty</th><th>OVR</th><th>Date</th></tr></thead>
+            <tbody id="championsLeaderboardBody"><tr><td colspan="9" class="empty">Connecting to the Champions List…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
       </div>
       <p data-i18n-skip="true" dir="rtl" style="margin:-2px 0 2px;text-align:center">للتواصل : <a data-i18n-skip="true" href="mailto:spldraft@gmail.com">spldraft@gmail.com</a></p>
 
@@ -535,6 +564,6 @@
 
 <!-- Turnstile is still enabled; app.js loads it only when a player starts interacting. -->
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.5" integrity="sha384-Fntl9b+IRzm2GKZK0c129fQFknWsn8pyxDejLO4wwds1LF9DSob2K2QXlfw8EIXn" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script defer src="./app.js?v=mobile-hotfix-2-3" integrity="sha384-8CGlrDRqgk8A3KjH6w4Izenqj5Im0XclP3uZS2UibSGoFsit+JU0D6zb3JnQA8GM" crossorigin="anonymous"></script>
+<script defer src="./app.js?v=champions-list-1" integrity="sha384-CJ7CItRInqBXDcuo52S4qVUEHMYeeReQiWTemmxZzv4VJRYiV9lz1tH6Jgg8PUSr" crossorigin="anonymous"></script>
 </body>
 </html>

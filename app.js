@@ -1177,6 +1177,16 @@ function getDerivedAIStrength(clubId) {
         "Ratings by Season runs only. Each player can appear with up to their best three retained Standard results.": "خاص بنمط تقييم الموسم، ويُحتفظ لكل لاعب بأفضل ثلاث نتائج فقط.",
         "Daily Challenge Leaderboard": "ترتيب تحدي اليوم",
         "Today’s no-skip challenge. The first three attempts are eligible for this leaderboard.": "تحدي اليوم بدون تخطّي، وأول ثلاث محاولات تدخل الترتيب.",
+        "Champions List": "قائمة الأبطال",
+        "Only players who finish a Standard Season with a perfect 34–0–0 record are added here. This is the ultimate way to win SPL Draft.": "لا يُضاف هنا إلا من ينهي الموسم العادي بسجل مثالي 34–0–0. هذا هو الفوز النهائي في SPL Draft.",
+        "34 wins · 0 draws · 0 losses": "34 فوز · 0 تعادل · 0 خسارة",
+        "Ranked by goal difference, goals scored, goals conceded, then earliest completion.": "الترتيب حسب فارق الأهداف، ثم الأهداف المسجلة، ثم الأقل استقبالاً، ثم الأسبق تحقيقاً.",
+        "Connecting to the Champions List…": "جاري الاتصال بقائمة الأبطال…",
+        "Win SPL Draft: finish the season 34–0–0.": "للفوز في SPL Draft: أنهِ الموسم بسجل 34–0–0.",
+        "Perfect-season winners enter the Champions List.": "أصحاب الموسم المثالي يدخلون قائمة الأبطال.",
+        "Winning the league is a great result, but the ultimate game victory is a perfect 34–0–0 season, which earns your place in the Champions List. Restart Run starts a fresh draft any time.": "تحقيق الدوري نتيجة رائعة، لكن الفوز النهائي في اللعبة هو موسم مثالي 34–0–0 يمنحك مكاناً في قائمة الأبطال. ويمكنك بدء درافت جديد في أي وقت.",
+        "Champions": "الأبطال",
+        "Record": "السجل",
         "Personal Records": "أرقامك الشخصية",
         "Statistics": "الإحصائيات",
         "Achievements": "الإنجازات",
@@ -3337,6 +3347,111 @@ function getDerivedAIStrength(clubId) {
     }
 
 
+
+    async function renderChampionsLeaderboard() {
+      const panel = document.getElementById("championsLeaderboardPanel"),
+        body = document.getElementById("championsLeaderboardBody"),
+        rankNode = document.getElementById("myChampionsRank"),
+        badge = document.getElementById("championsLeaderboardStatusBadge");
+
+      if (!panel || !body || !rankNode || !badge) return;
+
+      panel.style.display = "";
+      badge.textContent = isArabicUi() ? "الأبطال" : "Champions";
+      body.innerHTML = isArabicUi()
+        ? '<tr><td colspan="9" class="empty">جاري تحميل قائمة الأبطال…<\/td><\/tr>'
+        : '<tr><td colspan="9" class="empty">Loading the Champions List…<\/td><\/tr>';
+      rankNode.textContent = isArabicUi()
+        ? "جاري التحقق من ترتيبك في قائمة الأبطال…"
+        : "Checking your Champions List rank…";
+
+      try {
+        const publicClient = initializePublicOnlineBackend(),
+          boardResult = await withTimeout(
+            publicClient.rpc(
+              "get_champions_leaderboard_v1",
+              {
+                p_limit: 100
+              }
+            ),
+            PUBLIC_RPC_TIMEOUT_MS,
+            "Champions List"
+          );
+
+        if (boardResult.error) throw boardResult.error;
+
+        const rows = Array.isArray(boardResult.data)
+          ? boardResult.data
+          : [];
+
+        body.innerHTML = rows.length
+          ? rows.map(row => `<tr>
+              <td>${Math.round(+row.rank || 0)}<\/td>
+              <td>${escapeHtml(row.display_name || "Anonymous")}<\/td>
+              <td><span class="champion-record">34–0–0<\/span><\/td>
+              <td>${Math.round(+row.goals_for || 0)}<\/td>
+              <td>${Math.round(+row.goals_against || 0)}<\/td>
+              <td>${+row.goal_difference > 0 ? "+" : ""}${Math.round(+row.goal_difference || 0)}<\/td>
+              <td>${"hard" === row.difficulty ? (isArabicUi() ? "صعب" : "Hard") : (isArabicUi() ? "عادي" : "Normal")}<\/td>
+              <td>${(+row.squad_overall || 0).toFixed(1)}<\/td>
+              <td>${escapeHtml(formatRunDate(row.completed_at))}<\/td>
+            <\/tr>`).join("")
+          : isArabicUi()
+            ? '<tr><td colspan="9" class="empty">لم يحقق أي لاعب موسم 34–0–0 حتى الآن.<\/td><\/tr>'
+            : '<tr><td colspan="9" class="empty">No player has completed a 34–0–0 season yet.<\/td><\/tr>';
+      } catch (error) {
+        console.warn("Could not load Champions List.", error);
+        body.innerHTML = isArabicUi()
+          ? '<tr><td colspan="9" class="empty">قائمة الأبطال غير متاحة مؤقتاً.<\/td><\/tr>'
+          : '<tr><td colspan="9" class="empty">Champions List temporarily unavailable.<\/td><\/tr>';
+        rankNode.textContent = onlineFailureMessage(
+          error,
+          isArabicUi()
+            ? "ترتيبك في قائمة الأبطال غير متاح مؤقتاً."
+            : "Your Champions List rank is temporarily unavailable."
+        );
+        return;
+      }
+
+      await initializeOnlineBackend();
+      if (!onlineUser) {
+        rankNode.textContent = isArabicUi()
+          ? "ابدأ أو استأنف اللعب الآمن لعرض ترتيبك في قائمة الأبطال."
+          : "Start or resume secure gameplay to view your Champions List rank.";
+        return;
+      }
+
+      try {
+        const rankResult = await withTimeout(
+          onlineClient.rpc("get_my_champions_rank"),
+          PERSONAL_RPC_TIMEOUT_MS,
+          "Personal Champions List rank"
+        );
+
+        if (rankResult.error) throw rankResult.error;
+
+        const rank = rankResult.data || {},
+          best = rank.bestScore || {};
+
+        rankNode.textContent = rank.hasScore
+          ? isArabicUi()
+            ? `ترتيبك في قائمة الأبطال: ${rank.rankLabel || "—"} · أفضل موسم: ${Math.round(+best.goalsFor || 0)} له، ${Math.round(+best.goalsAgainst || 0)} عليه، فارق ${+best.goalDifference > 0 ? "+" : ""}${Math.round(+best.goalDifference || 0)}`
+            : `Your Champions List rank: ${rank.rankLabel || "—"} · Best perfect season: ${Math.round(+best.goalsFor || 0)} GF, ${Math.round(+best.goalsAgainst || 0)} GA, ${+best.goalDifference > 0 ? "+" : ""}${Math.round(+best.goalDifference || 0)} GD`
+          : isArabicUi()
+            ? "غير مصنف بعد · حقق 34–0–0 لتفوز باللعبة وتدخل قائمة الأبطال."
+            : "Unranked · Finish 34–0–0 to win the game and enter the Champions List.";
+      } catch (error) {
+        console.warn("Could not load personal Champions List rank.", error);
+        rankNode.textContent = onlineFailureMessage(
+          error,
+          isArabicUi()
+            ? "ترتيبك في قائمة الأبطال غير متاح مؤقتاً."
+            : "Your Champions List rank is temporarily unavailable."
+        );
+      }
+    }
+
+
     async function renderGlobalLeaderboard() {
       const tabs = document.getElementById("globalLeaderboardTabs"),
         body = document.getElementById("globalLeaderboardBody"),
@@ -4395,6 +4510,7 @@ function getDerivedAIStrength(clubId) {
       renderCareerStatistics();
       renderDailyHistory();
       renderDailyLeaderboard();
+      renderChampionsLeaderboard();
       renderGlobalLeaderboard()
     }
 
@@ -9164,6 +9280,7 @@ xt("dailyStartBtn").addEventListener("click", async () => {
     xt("turnstileRetryBtn").addEventListener("click", () => window.location.reload());
     xt("refreshGlobalLeaderboardBtn").addEventListener("click", renderGlobalLeaderboard);
     xt("refreshDailyLeaderboardBtn").addEventListener("click", renderDailyLeaderboard);
+    xt("refreshChampionsLeaderboardBtn").addEventListener("click", renderChampionsLeaderboard);
     xt("refreshReviewLeaderboardBtn").addEventListener("click", () => {
       renderSeasonReviewLeaderboard()
     });
