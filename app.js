@@ -7548,12 +7548,10 @@ function S(t, s) {
         displayOverall = t.displayOverall,
         perfectSeasonChance =
           displayOverall >= 90
-            ? .80
+            ? .20
             : displayOverall >= 89
-              ? .50
-              : displayOverall >= 88
-                ? .25
-                : 0;
+              ? .10
+              : 0;
 
       if (displayOverall >= 89) {
         s.champ = 1;
