@@ -3453,6 +3453,112 @@ function getDerivedAIStrength(clubId) {
     }
 
 
+
+    async function renderSeasonReviewChampionsLeaderboard() {
+      const panel = document.getElementById("reviewChampionsLeaderboardPanel"),
+        body = document.getElementById("reviewChampionsLeaderboardBody"),
+        rankNode = document.getElementById("reviewMyChampionsRank"),
+        badge = document.getElementById("reviewChampionsLeaderboardStatusBadge");
+
+      if (!panel || !body || !rankNode || !badge) return;
+
+      panel.style.display = "";
+      badge.textContent = isArabicUi() ? "الأبطال" : "Champions";
+      body.innerHTML = isArabicUi()
+        ? '<tr><td colspan="10" class="empty">جاري تحميل قائمة الأبطال…<\/td><\/tr>'
+        : '<tr><td colspan="10" class="empty">Loading the Champions List…<\/td><\/tr>';
+      rankNode.textContent = isArabicUi()
+        ? "جاري التحقق من ترتيبك في قائمة الأبطال…"
+        : "Checking your Champions List rank…";
+
+      try {
+        const publicClient = initializePublicOnlineBackend(),
+          boardResult = await withTimeout(
+            publicClient.rpc(
+              "get_champions_leaderboard_v1",
+              {
+                p_limit: 100
+              }
+            ),
+            PUBLIC_RPC_TIMEOUT_MS,
+            "Season Review Champions List"
+          );
+
+        if (boardResult.error) throw boardResult.error;
+
+        const rows = Array.isArray(boardResult.data)
+          ? boardResult.data
+          : [];
+
+        body.innerHTML = rows.length
+          ? rows.map(row => `<tr>
+              <td>${Math.round(+row.rank || 0)}<\/td>
+              <td>${escapeHtml(row.display_name || "Anonymous")}<\/td>
+              <td class="scorecell">${Math.round(+row.score || 0).toLocaleString()}<\/td>
+              <td><span class="champion-record">34–0–0<\/span><\/td>
+              <td>${Math.round(+row.goals_for || 0)}<\/td>
+              <td>${Math.round(+row.goals_against || 0)}<\/td>
+              <td>${+row.goal_difference > 0 ? "+" : ""}${Math.round(+row.goal_difference || 0)}<\/td>
+              <td>${"hard" === row.difficulty ? (isArabicUi() ? "صعب" : "Hard") : (isArabicUi() ? "عادي" : "Normal")}<\/td>
+              <td>${(+row.squad_overall || 0).toFixed(1)}<\/td>
+              <td>${escapeHtml(formatRunDate(row.completed_at))}<\/td>
+            <\/tr>`).join("")
+          : isArabicUi()
+            ? '<tr><td colspan="10" class="empty">لم يحقق أي لاعب موسم 34–0–0 حتى الآن.<\/td><\/tr>'
+            : '<tr><td colspan="10" class="empty">No player has completed a 34–0–0 season yet.<\/td><\/tr>';
+      } catch (error) {
+        console.warn("Could not load the Season Review Champions List.", error);
+        body.innerHTML = isArabicUi()
+          ? '<tr><td colspan="10" class="empty">قائمة الأبطال غير متاحة مؤقتاً.<\/td><\/tr>'
+          : '<tr><td colspan="10" class="empty">Champions List temporarily unavailable.<\/td><\/tr>';
+        rankNode.textContent = onlineFailureMessage(
+          error,
+          isArabicUi()
+            ? "ترتيبك في قائمة الأبطال غير متاح مؤقتاً."
+            : "Your Champions List rank is temporarily unavailable."
+        );
+        return;
+      }
+
+      await initializeOnlineBackend();
+      if (!onlineUser) {
+        rankNode.textContent = isArabicUi()
+          ? "ابدأ أو استأنف اللعب الآمن لعرض ترتيبك في قائمة الأبطال."
+          : "Start or resume secure gameplay to view your Champions List rank.";
+        return;
+      }
+
+      try {
+        const rankResult = await withTimeout(
+          onlineClient.rpc("get_my_champions_rank"),
+          PERSONAL_RPC_TIMEOUT_MS,
+          "Season Review personal Champions List rank"
+        );
+
+        if (rankResult.error) throw rankResult.error;
+
+        const rank = rankResult.data || {},
+          best = rank.bestScore || {};
+
+        rankNode.textContent = rank.hasScore
+          ? isArabicUi()
+            ? `ترتيبك في قائمة الأبطال: ${rank.rankLabel || "—"} · التقييم: ${Math.round(+best.score || 0).toLocaleString()} · أفضل موسم: ${Math.round(+best.goalsFor || 0)} له، ${Math.round(+best.goalsAgainst || 0)} عليه، فارق ${+best.goalDifference > 0 ? "+" : ""}${Math.round(+best.goalDifference || 0)}`
+            : `Your Champions List rank: ${rank.rankLabel || "—"} · Rating: ${Math.round(+best.score || 0).toLocaleString()} · Best perfect season: ${Math.round(+best.goalsFor || 0)} GF, ${Math.round(+best.goalsAgainst || 0)} GA, ${+best.goalDifference > 0 ? "+" : ""}${Math.round(+best.goalDifference || 0)} GD`
+          : isArabicUi()
+            ? "غير مصنف بعد · حقق 34–0–0 لتفوز باللعبة وتدخل قائمة الأبطال."
+            : "Unranked · Finish 34–0–0 to win the game and enter the Champions List.";
+      } catch (error) {
+        console.warn("Could not load personal Season Review Champions List rank.", error);
+        rankNode.textContent = onlineFailureMessage(
+          error,
+          isArabicUi()
+            ? "ترتيبك في قائمة الأبطال غير متاح مؤقتاً."
+            : "Your Champions List rank is temporarily unavailable."
+        );
+      }
+    }
+
+
     async function renderGlobalLeaderboard() {
       const tabs = document.getElementById("globalLeaderboardTabs"),
         body = document.getElementById("globalLeaderboardBody"),
@@ -3561,7 +3667,8 @@ function getDerivedAIStrength(clubId) {
         tabs = document.getElementById("reviewLeaderboardTabs"),
         head = document.getElementById("reviewLeaderboardHead"),
         body = document.getElementById("reviewLeaderboardBody"),
-        rankNode = document.getElementById("reviewLeaderboardRank");
+        rankNode = document.getElementById("reviewLeaderboardRank"),
+        championsPanel = document.getElementById("reviewChampionsLeaderboardPanel");
 
       if (
         !panel ||
@@ -3577,6 +3684,7 @@ function getDerivedAIStrength(clubId) {
       if (!run || "alltime" === run.draftMode) {
         reviewLeaderboardRun = null;
         panel.style.display = "none";
+        if (championsPanel) championsPanel.style.display = "none";
         return
       }
 
@@ -3593,6 +3701,7 @@ function getDerivedAIStrength(clubId) {
       const isDaily = !!run.isDailyChallenge;
 
       if (isDaily) {
+        if (championsPanel) championsPanel.style.display = "none";
         title.textContent = "Daily Challenge Leaderboard";
         description.textContent =
           "Today’s Daily leaderboard. Each player appears once with their best score from the first three eligible attempts.";
@@ -3706,6 +3815,8 @@ function getDerivedAIStrength(clubId) {
 
         return
       }
+
+      renderSeasonReviewChampionsLeaderboard();
 
       title.textContent = "Standard Season Leaderboard";
       description.textContent =
@@ -9283,6 +9394,7 @@ xt("dailyStartBtn").addEventListener("click", async () => {
     xt("refreshReviewLeaderboardBtn").addEventListener("click", () => {
       renderSeasonReviewLeaderboard()
     });
+    xt("refreshReviewChampionsLeaderboardBtn").addEventListener("click", renderSeasonReviewChampionsLeaderboard);
     xt("reviewLeaderboardTabs").querySelectorAll("button").forEach(button => {
       button.addEventListener("click", () => {
         reviewLeaderboardPeriod = button.dataset.period;

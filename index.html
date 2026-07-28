@@ -430,6 +430,30 @@
         </div>
       </div>
 
+      <div class="panel champions-panel" id="reviewChampionsLeaderboardPanel" style="display:none">
+        <div class="records-section-head">
+          <div>
+            <div class="h2">Champions List</div>
+            <p>Only players who finish a Standard Season with a perfect 34–0–0 record are added here. This is the ultimate way to win SPL Draft.</p>
+          </div>
+          <div class="online-tools">
+            <span class="badge online-state champions-badge" id="reviewChampionsLeaderboardStatusBadge">Champions</span>
+            <button class="btn ghost sm" id="refreshReviewChampionsLeaderboardBtn" type="button">Refresh</button>
+          </div>
+        </div>
+        <div class="champions-rule" role="note">
+          <b>34 wins · 0 draws · 0 losses</b>
+          <span>Ranked by rating. Ties are broken by goal difference, goals scored, goals conceded, then earliest completion.</span>
+        </div>
+        <div class="tablewrap local-table champions-table" style="margin-top:12px">
+          <div id="reviewMyChampionsRank" class="resume-draft-note" style="margin:0 0 10px"></div>
+          <table class="lg">
+            <thead><tr><th>#</th><th>Team</th><th>Rating</th><th>Record</th><th>GF</th><th>GA</th><th>GD</th><th>Difficulty</th><th>OVR</th><th>Date</th></tr></thead>
+            <tbody id="reviewChampionsLeaderboardBody"><tr><td colspan="10" class="empty">Connecting to the Champions List…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
       <div style="display:flex;justify-content:center"><button class="btn" id="restartRunBtn">Restart Run</button></div>
     </div>
   </section>
@@ -564,6 +588,6 @@
 
 <!-- Turnstile is still enabled; app.js loads it only when a player starts interacting. -->
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.5" integrity="sha384-Fntl9b+IRzm2GKZK0c129fQFknWsn8pyxDejLO4wwds1LF9DSob2K2QXlfw8EIXn" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script defer src="./app.js?v=emergency-34-0-1" integrity="sha384-2Cr1IlkodMOHfoL93zm6jlfGX8TSREUwWtVEAX/30aViLuVrF6vnFxtUc1t+QGCM" crossorigin="anonymous"></script>
+<script defer src="./app.js?v=champions-review-1" integrity="sha384-vK7vLE1QzSNjeFT0iK4GF/gFv6yz/loOIiBty1kl0ptdM35AifwxsUGwdEXkxkHn" crossorigin="anonymous"></script>
 </body>
 </html>
