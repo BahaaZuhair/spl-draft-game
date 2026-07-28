@@ -98,7 +98,7 @@
 
     const PHASE6_NO_DATABASE_BUILD = !0,
       PHASE6_BUILD =
-        "daily-skip-recovery-hotfix-2",
+        "daily-finalization-hotfix-3-no-overlap",
       TURNSTILE_SITE_KEY = "0x4AAAAAAD4gP5siHnkvX-5i",
       TURNSTILE_SCRIPT_TIMEOUT_MS = 15000,
       TURNSTILE_CHALLENGE_TIMEOUT_MS = 45000,
@@ -8342,7 +8342,26 @@ function S(t, s) {
         Ct.serverActionPending
       ) return !1;
 
-      const expectedMatchday = Ct.md;
+      const expectedMatchday = Ct.md,
+        isDailyFinalReveal = !!(
+          gt &&
+          gt.isDaily &&
+          expectedMatchday === 33
+        ),
+        recoveryToken = isDailyFinalReveal
+          ? ++dailySkipRecoverySerial
+          : 0;
+
+      if (isDailyFinalReveal) {
+        dailySkipRecoveryPending = {
+          token: recoveryToken,
+          runId: Ct.serverRunId,
+          expectedMatchday,
+          startedAt: Date.now(),
+          phase: "in_flight",
+          action: "final_match"
+        }
+      }
 
       setSecureSeasonBusy(
         !0,
@@ -8351,8 +8370,29 @@ function S(t, s) {
           : "Playing…"
       );
 
+      let slowDailyTimer = null;
+
       try {
         await ensureAuthenticatedOnlineBackend();
+
+        if (isDailyFinalReveal) {
+          slowDailyTimer = window.setTimeout(() => {
+            if (
+              dailySkipRecoveryPending &&
+              dailySkipRecoveryPending.token === recoveryToken &&
+              dailySkipRecoveryPending.phase === "in_flight" &&
+              Ct &&
+              !Ct.done
+            ) {
+              setSecureSeasonBusy(
+                !0,
+                isArabicUi()
+                  ? "جارٍ حفظ المباراة الأخيرة… لا تضغط مرة أخرى"
+                  : "Saving the final match… do not tap again"
+              )
+            }
+          }, 4000)
+        }
 
         const { data, error } =
           await onlineClient.functions.invoke(
@@ -8373,6 +8413,10 @@ function S(t, s) {
             data.errorCode ||
             "REVEAL_MATCHDAY_REJECTED"
           )
+        }
+
+        if (isDailyFinalReveal) {
+          dailySkipRecoveryPending = null
         }
 
         applyTrustedPlayerStatsState(
@@ -8432,6 +8476,26 @@ function S(t, s) {
           error
         );
 
+        if (
+          isDailyFinalReveal &&
+          Ct &&
+          !Ct.done
+        ) {
+          if (
+            dailySkipRecoveryPending &&
+            dailySkipRecoveryPending.token === recoveryToken
+          ) {
+            dailySkipRecoveryPending.phase = "failed"
+          }
+
+          const recovered =
+            await recoverDailySkipFromServer(
+              "final_match_error"
+            );
+
+          if (recovered) return !0
+        }
+
         setDraftBackendStatus(
           "error",
           "The next matchday could not be loaded. Your season is safely saved."
@@ -8439,6 +8503,10 @@ function S(t, s) {
 
         return !1
       } finally {
+        if (null !== slowDailyTimer) {
+          window.clearTimeout(slowDailyTimer)
+        }
+
         if (Ct && !Ct.done) {
           setSecureSeasonBusy(!1)
         }
@@ -8810,6 +8878,7 @@ function S(t, s) {
 
       if (
         !pending ||
+        pending.phase !== "failed" ||
         !Ct ||
         Ct.done ||
         !gt ||
@@ -8834,18 +8903,15 @@ function S(t, s) {
           try {
             await ensureAuthenticatedOnlineBackend();
 
-            const seasonResult = await withTimeout(
-              onlineClient.functions.invoke(
+            const seasonResult =
+              await onlineClient.functions.invoke(
                 "start-season",
                 {
                   body: {
                     runId: pending.runId
                   }
                 }
-              ),
-              7000,
-              "Daily season recovery"
-            );
+              );
 
             if (seasonResult.error) {
               throw seasonResult.error
@@ -8971,7 +9037,9 @@ function S(t, s) {
           token: recoveryToken,
           runId: Ct.serverRunId,
           expectedMatchday,
-          startedAt: Date.now()
+          startedAt: Date.now(),
+          phase: "in_flight",
+          action: "skip"
         }
       }
 
@@ -8986,8 +9054,31 @@ function S(t, s) {
       try {
         await ensureAuthenticatedOnlineBackend();
 
-        const request =
-          onlineClient.functions.invoke(
+        let slowDailyTimer = null;
+
+        if (isDailySkip) {
+          slowDailyTimer = window.setTimeout(() => {
+            if (
+              dailySkipRecoveryPending &&
+              dailySkipRecoveryPending.token === recoveryToken &&
+              dailySkipRecoveryPending.phase === "in_flight" &&
+              Ct &&
+              !Ct.done
+            ) {
+              setSecureSeasonBusy(
+                !0,
+                isArabicUi()
+                  ? "جارٍ إنهاء تحدي اليوم… لا تضغط مرة أخرى"
+                  : "Finishing Daily Challenge… do not tap again"
+              )
+            }
+          }, 4000)
+        }
+
+        let result;
+
+        try {
+          result = await onlineClient.functions.invoke(
             "skip-season",
             {
               body: {
@@ -8995,15 +9086,14 @@ function S(t, s) {
                 expectedMatchday
               }
             }
-          ),
-          result = isDailySkip
-            ? await withTimeout(
-                request,
-                10000,
-                "Daily Skip To End"
-              )
-            : await request,
-          { data, error } = result;
+          )
+        } finally {
+          if (null !== slowDailyTimer) {
+            window.clearTimeout(slowDailyTimer)
+          }
+        }
+
+        const { data, error } = result;
 
         if (
           isDailySkip &&
@@ -9125,12 +9215,16 @@ function S(t, s) {
           Ct &&
           !Ct.done
         ) {
+          if (
+            dailySkipRecoveryPending &&
+            dailySkipRecoveryPending.token === recoveryToken
+          ) {
+            dailySkipRecoveryPending.phase = "failed"
+          }
+
           const recovered =
             await recoverDailySkipFromServer(
-              error && error.code ===
-                "CLIENT_TIMEOUT"
-                ? "client_timeout"
-                : "request_error"
+              "request_error"
             );
 
           if (recovered) return
@@ -10114,8 +10208,10 @@ xt("dailyStartBtn").addEventListener("click", async () => {
         if (
           document.visibilityState === "visible" &&
           dailySkipRecoveryPending &&
+          dailySkipRecoveryPending.phase === "failed" &&
           Ct &&
-          !Ct.done
+          !Ct.done &&
+          !Ct.serverActionPending
         ) {
           recoverDailySkipFromServer(
             "tab_visible"
@@ -10129,8 +10225,10 @@ xt("dailyStartBtn").addEventListener("click", async () => {
       () => {
         if (
           dailySkipRecoveryPending &&
+          dailySkipRecoveryPending.phase === "failed" &&
           Ct &&
-          !Ct.done
+          !Ct.done &&
+          !Ct.serverActionPending
         ) {
           recoverDailySkipFromServer(
             "connection_restored"
