@@ -5342,7 +5342,10 @@ function buildDailyChallenge() {
       n("scr-daily");
 
       try {
-        await initializeOnlineBackend();
+        // Incognito/private windows have no saved Supabase session. Create the
+        // protected anonymous session before calling the authenticated Daily
+        // Challenge Edge Function. Existing sessions are reused automatically.
+        await ensureAuthenticatedOnlineBackend({ createAnonymous: !0 });
 
         const savedDailyMarker =
             readSecureDailyResumeMarker(),
