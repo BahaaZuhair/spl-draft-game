@@ -1131,6 +1131,8 @@ function getDerivedAIStrength(clubId) {
       }),
       UI_TEXT_AR = Object.freeze({
         "Leaderboards": "لوحات الصدارة",
+        "Contact Us": "تواصل معنا",
+        "Email:": "البريد الإلكتروني:",
         "Open leaderboards": "افتح لوحات الصدارة",
         "Start Game": "ابدأ اللعب",
         "Daily Challenge": "تحدي اليوم",
