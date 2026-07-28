@@ -98,7 +98,7 @@
 
     const PHASE6_NO_DATABASE_BUILD = !0,
       PHASE6_BUILD =
-        "daily-finalization-hotfix-3-no-overlap",
+        "arabic-design-final-2026-07-19",
       TURNSTILE_SITE_KEY = "0x4AAAAAAD4gP5siHnkvX-5i",
       TURNSTILE_SCRIPT_TIMEOUT_MS = 15000,
       TURNSTILE_CHALLENGE_TIMEOUT_MS = 45000,
@@ -5538,9 +5538,7 @@ function getDailyCurrentChoice() {
         dailyButton =
           document.getElementById(
             "dailyChallengeBtn"
-          ),
-        skipRollButton =
-          document.getElementById("skipBtn");
+          );
 
       document.body.classList.toggle(
         "daily-run-active",
@@ -5550,30 +5548,6 @@ function getDailyCurrentChoice() {
       if (dailyButton) {
         dailyButton.textContent =
           "Daily Challenge"
-      }
-
-      if (skipRollButton) {
-        if (dailyActive) {
-          skipRollButton.hidden = !0;
-          skipRollButton.setAttribute(
-            "aria-hidden",
-            "true"
-          );
-          skipRollButton.style.setProperty(
-            "display",
-            "none",
-            "important"
-          );
-          skipRollButton.disabled = !0
-        } else {
-          skipRollButton.hidden = !1;
-          skipRollButton.removeAttribute(
-            "aria-hidden"
-          );
-          skipRollButton.style.removeProperty(
-            "display"
-          )
-        }
       }
     }
 
@@ -6141,11 +6115,6 @@ const allClubNames =
     }
 
     async function runServerDraftRoll(useSkip) {
-      if (useSkip && gt && gt.isDaily) {
-        X(!1);
-        return
-      }
-
       if (
         !gt ||
         !gt.serverMode ||
@@ -7188,11 +7157,6 @@ const allClubNames =
     }
 
 function z(t) {
-  if (t && gt && gt.isDaily) {
-    X(!1);
-    return
-  }
-
   if (
     DRAFT_SERVER_MODE_ENABLED &&
     gt &&
@@ -7215,29 +7179,8 @@ function z(t) {
 }
 
     function X(t) {
-      const button = xt("skipBtn");
-
-      if (gt && gt.isDaily) {
-        button.hidden = !0;
-        button.setAttribute(
-          "aria-hidden",
-          "true"
-        );
-        button.style.setProperty(
-          "display",
-          "none",
-          "important"
-        );
-        button.disabled = !0;
-        return
-      }
-
-      button.hidden = !1;
-      button.removeAttribute("aria-hidden");
-      button.style.removeProperty("display");
-      button.disabled = !1;
-
-      const secureDaily =
+      const button = xt("skipBtn"),
+        secureDaily =
           !!(
             gt &&
             gt.isDaily &&
@@ -7790,10 +7733,7 @@ function S(t, s) {
     }
 
     let pendingSecureSeasonResumeState = null,
-      secureSeasonRecoveryBusy = !1,
-      dailySkipRecoveryPending = null,
-      dailySkipRecoveryPromise = null,
-      dailySkipRecoverySerial = 0;
+      secureSeasonRecoveryBusy = !1;
 
     function readSecureSeasonResumeMarker() {
       try {
@@ -8342,26 +8282,7 @@ function S(t, s) {
         Ct.serverActionPending
       ) return !1;
 
-      const expectedMatchday = Ct.md,
-        isDailyFinalReveal = !!(
-          gt &&
-          gt.isDaily &&
-          expectedMatchday === 33
-        ),
-        recoveryToken = isDailyFinalReveal
-          ? ++dailySkipRecoverySerial
-          : 0;
-
-      if (isDailyFinalReveal) {
-        dailySkipRecoveryPending = {
-          token: recoveryToken,
-          runId: Ct.serverRunId,
-          expectedMatchday,
-          startedAt: Date.now(),
-          phase: "in_flight",
-          action: "final_match"
-        }
-      }
+      const expectedMatchday = Ct.md;
 
       setSecureSeasonBusy(
         !0,
@@ -8370,29 +8291,8 @@ function S(t, s) {
           : "Playing…"
       );
 
-      let slowDailyTimer = null;
-
       try {
         await ensureAuthenticatedOnlineBackend();
-
-        if (isDailyFinalReveal) {
-          slowDailyTimer = window.setTimeout(() => {
-            if (
-              dailySkipRecoveryPending &&
-              dailySkipRecoveryPending.token === recoveryToken &&
-              dailySkipRecoveryPending.phase === "in_flight" &&
-              Ct &&
-              !Ct.done
-            ) {
-              setSecureSeasonBusy(
-                !0,
-                isArabicUi()
-                  ? "جارٍ حفظ المباراة الأخيرة… لا تضغط مرة أخرى"
-                  : "Saving the final match… do not tap again"
-              )
-            }
-          }, 4000)
-        }
 
         const { data, error } =
           await onlineClient.functions.invoke(
@@ -8413,10 +8313,6 @@ function S(t, s) {
             data.errorCode ||
             "REVEAL_MATCHDAY_REJECTED"
           )
-        }
-
-        if (isDailyFinalReveal) {
-          dailySkipRecoveryPending = null
         }
 
         applyTrustedPlayerStatsState(
@@ -8476,26 +8372,6 @@ function S(t, s) {
           error
         );
 
-        if (
-          isDailyFinalReveal &&
-          Ct &&
-          !Ct.done
-        ) {
-          if (
-            dailySkipRecoveryPending &&
-            dailySkipRecoveryPending.token === recoveryToken
-          ) {
-            dailySkipRecoveryPending.phase = "failed"
-          }
-
-          const recovered =
-            await recoverDailySkipFromServer(
-              "final_match_error"
-            );
-
-          if (recovered) return !0
-        }
-
         setDraftBackendStatus(
           "error",
           "The next matchday could not be loaded. Your season is safely saved."
@@ -8503,517 +8379,10 @@ function S(t, s) {
 
         return !1
       } finally {
-        if (null !== slowDailyTimer) {
-          window.clearTimeout(slowDailyTimer)
-        }
-
         if (Ct && !Ct.done) {
           setSecureSeasonBusy(!1)
         }
       }
-    }
-
-
-    function applySkippedMatchdaySilently(matchday) {
-      if (!Ct || Ct.done) return !1;
-
-      const serverMatchday =
-          +matchday.matchday || 0,
-        expectedNext = Ct.md + 1;
-
-      if (serverMatchday <= Ct.md) return !0;
-
-      if (serverMatchday !== expectedNext) {
-        throw new Error(
-          "SKIP_MATCHDAY_SEQUENCE_MISMATCH"
-        )
-      }
-
-      const localMatches =
-        safeServerMatchdayToLocal(matchday);
-
-      if (!localMatches) {
-        throw new Error(
-          "SKIP_MATCHDAY_PAYLOAD_MISSING"
-        )
-      }
-
-      Ct.plannedResults[Ct.md] =
-        localMatches.map(match => ({
-          h: match.h,
-          a: match.a,
-          score: [
-            match.score[0],
-            match.score[1]
-          ]
-        }));
-
-      for (const match of localMatches) {
-        C(match.h, match.a, [
-          match.score[0],
-          match.score[1]
-        ])
-      }
-
-      const userMatch = localMatches.find(
-        match =>
-          match.h === Lt ||
-          match.a === Lt
-      );
-
-      if (!userMatch) {
-        throw new Error(
-          "SKIP_USER_MATCH_MISSING"
-        )
-      }
-
-      const isHome = userMatch.h === Lt,
-        gf = isHome
-          ? userMatch.score[0]
-          : userMatch.score[1],
-        ga = isHome
-          ? userMatch.score[1]
-          : userMatch.score[0];
-
-      Ct.myMatches.push({
-        md: serverMatchday,
-        home: isHome,
-        opp: isHome
-          ? userMatch.a
-          : userMatch.h,
-        gf,
-        ga
-      });
-
-      Ct.md = serverMatchday;
-      return !0
-    }
-
-    function recoveredSquadLeaders() {
-      const rows = gt && Array.isArray(gt.slots)
-        ? gt.slots
-            .filter(slot => slot && slot.player)
-            .map(slot => {
-              const stats =
-                Ct && Ct.pstats &&
-                Ct.pstats[slot.player.card_id] || {
-                  g: 0,
-                  a: 0,
-                  cs: 0,
-                  rsum: 0,
-                  apps: 0
-                };
-
-              return {
-                slot,
-                stats,
-                average:
-                  +stats.apps > 0
-                    ? +stats.rsum / +stats.apps
-                    : 0
-              }
-            })
-        : [];
-
-      const fallback = rows[0] || {
-        slot: {
-          player: {
-            name: "—",
-            name_ar: ""
-          }
-        },
-        stats: {
-          g: 0,
-          a: 0,
-          apps: 0
-        },
-        average: 0
-      };
-
-      return {
-        topScorer:
-          rows.slice().sort((left, right) =>
-            (+right.stats.g || 0) -
-              (+left.stats.g || 0) ||
-            (+right.stats.a || 0) -
-              (+left.stats.a || 0)
-          )[0] || fallback,
-        topAssister:
-          rows.slice().sort((left, right) =>
-            (+right.stats.a || 0) -
-              (+left.stats.a || 0) ||
-            (+right.stats.g || 0) -
-              (+left.stats.g || 0)
-          )[0] || fallback,
-        bestPlayer:
-          rows.slice().sort((left, right) =>
-            right.average - left.average ||
-            (+right.stats.apps || 0) -
-              (+left.stats.apps || 0)
-          )[0] || fallback
-      }
-    }
-
-    function renderRecoveredCompletedSeason(state) {
-      if (
-        !Ct ||
-        !gt ||
-        !state ||
-        state.status !== "completed" ||
-        !state.result
-      ) return !1;
-
-      const result = state.result;
-
-      Ct.serverFinalResult = result;
-      Ct.table = serverTableToLocalTable(
-        state.table || result.finalTable
-      );
-      Ct.md = 34;
-      Ct.done = !0;
-      Ct.serverActionPending = !1;
-
-      applyTrustedPlayerStatsState(state);
-
-      xt("mdNow").textContent = "34";
-      xt("nextMdBtn").style.display = "none";
-      xt("skipEndBtn").style.display = "none";
-      xt("restartCtlBtn").style.display =
-        "inline-block";
-      xt("latestPanel").style.display = "none";
-      xt("finalBand").classList.add("on");
-
-      const position = +result.finalPosition || 0,
-        champion = position === 1,
-        suffix =
-          position === 1
-            ? "st"
-            : position === 2
-              ? "nd"
-              : position === 3
-                ? "rd"
-                : "th";
-
-      xt("finalTitle").textContent =
-        isArabicUi()
-          ? champion
-            ? `أبطال الدوري! ${Jt()} توّج باللقب`
-            : `${Jt()} أنهى الموسم في المركز ${position}`
-          : champion
-            ? `CHAMPIONS! ${Jt()} won the league`
-            : `${Jt()} finished ${position}${suffix}`;
-
-      xt("finalNote").textContent =
-        isArabicUi()
-          ? `${+result.points || 0} نقطة · 34 مباراة · ${+result.wins || 0} فوز ${+result.draws || 0} تعادل ${+result.losses || 0} خسارة · سجل ${+result.goalsFor || 0} واستقبل ${+result.goalsAgainst || 0} · الفارق ${+result.goalDifference > 0 ? "+" : ""}${+result.goalDifference || 0}`
-          : `${+result.points || 0} pts · 34 played · ${+result.wins || 0}W ${+result.draws || 0}D ${+result.losses || 0}L · ${+result.goalsFor || 0} scored, ${+result.goalsAgainst || 0} conceded · GD ${+result.goalDifference > 0 ? "+" : ""}${+result.goalDifference || 0}`;
-
-      _();
-      tt();
-      renderLocalizedLeagueAwards();
-
-      const bigWinNode =
-          document.getElementById("bigWin"),
-        bigLossNode =
-          document.getElementById("bigLoss");
-
-      if (bigWinNode) {
-        bigWinNode.textContent = isArabicUi()
-          ? "تم استرجاع النتيجة النهائية بأمان من الخادم."
-          : "Final result safely recovered from the server."
-      }
-
-      if (bigLossNode) {
-        bigLossNode.textContent = isArabicUi()
-          ? "تفاصيل الجولات المتخطاة غير مطلوبة لحفظ النتيجة الرسمية."
-          : "Skipped match details were not needed to preserve the official result."
-      }
-
-      const leaders = recoveredSquadLeaders(),
-        scorer = leaders.topScorer,
-        assister = leaders.topAssister,
-        best = leaders.bestPlayer,
-        scorerPlayer = scorer.slot.player,
-        assisterPlayer = assister.slot.player,
-        bestPlayer = best.slot.player,
-        completedStrength = G(),
-        completedRunData = {
-          runId: gt.runId,
-          completedAt:
-            state.completedAt ||
-            new Date().toISOString(),
-          teamName:
-            result.teamName || Jt(),
-          difficulty:
-            result.difficulty ||
-            (gt.skipsInitial === 0
-              ? "hard"
-              : "normal"),
-          draftMode:
-            result.draftMode || gt.mode,
-          formation:
-            Xt[gt.fkey] &&
-            Xt[gt.fkey].name ||
-            gt.fkey,
-          squadOverall:
-            Number.isFinite(+result.squadOverall)
-              ? +result.squadOverall
-              : completedStrength.displayOverall,
-          defenceRating:
-            +completedStrength.def.toFixed(1),
-          midfieldRating:
-            +completedStrength.mid.toFixed(1),
-          attackRating:
-            +completedStrength.att.toFixed(1),
-          finalPosition: position,
-          played: +result.played || 34,
-          wins: +result.wins || 0,
-          draws: +result.draws || 0,
-          losses: +result.losses || 0,
-          goalsFor: +result.goalsFor || 0,
-          goalsAgainst:
-            +result.goalsAgainst || 0,
-          goalDifference:
-            +result.goalDifference || 0,
-          points: +result.points || 0,
-          isDailyChallenge:
-            result.isDailyChallenge === true ||
-            !!gt.isDaily,
-          dailyChallengeDate:
-            result.challengeDate ||
-            gt.challenge &&
-            gt.challenge.dateKey || null,
-          dailyAttemptType:
-            result.dailyAttemptType ||
-            gt.dailyAttemptType || null,
-          challengeId:
-            result.challengeId ||
-            gt.challenge &&
-            gt.challenge.challengeId || null,
-          topScorer: {
-            name: scorerPlayer.name,
-            nameAr:
-              scorerPlayer.name_ar ||
-              scorerPlayer.nameAr || "",
-            goals: +scorer.stats.g || 0
-          },
-          topAssister: {
-            name: assisterPlayer.name,
-            nameAr:
-              assisterPlayer.name_ar ||
-              assisterPlayer.nameAr || "",
-            assists: +assister.stats.a || 0
-          },
-          bestPlayer: {
-            name: bestPlayer.name,
-            nameAr:
-              bestPlayer.name_ar ||
-              bestPlayer.nameAr || "",
-            averageRating:
-              +best.average.toFixed(1)
-          },
-          cleanSheets:
-            +result.cleanSheets || 0,
-          draftedPlayers:
-            compactDraftedPlayers()
-        },
-        saveMeta =
-          saveRunResult(completedRunData);
-
-      Ct.savedRun =
-        saveMeta.run || completedRunData;
-
-      lastSeasonReviewData = {
-        recovered: !0,
-        english: {
-          head: "Season result restored",
-          paras: [
-            `The server safely completed ${Jt()}'s Daily Challenge even though the original Skip To End response did not finish loading on this device.`,
-            `${Jt()} finished ${position}${suffix} with ${+result.points || 0} points from a ${+result.wins || 0}W ${+result.draws || 0}D ${+result.losses || 0}L record, scoring ${+result.goalsFor || 0} and conceding ${+result.goalsAgainst || 0}.`,
-            `${scorerPlayer.name} led the squad with ${+scorer.stats.g || 0} goals, ${assisterPlayer.name} supplied ${+assister.stats.a || 0} assists, and ${bestPlayer.name} had the best average rating at ${best.average.toFixed(1)}.`,
-            "The official score and Daily leaderboard submission came from the trusted server result; no duplicate season was created."
-          ]
-        },
-        arabic: {
-          head: "تم استرجاع نتيجة الموسم",
-          paras: [
-            `أكمل الخادم تحدي اليوم لفريق ${Jt()} بأمان رغم أن استجابة زر تخطي الموسم لم تكتمل على هذا الجهاز.`,
-            `أنهى ${Jt()} الموسم في المركز ${position} برصيد ${+result.points || 0} نقطة، بعد ${+result.wins || 0} فوز و${+result.draws || 0} تعادل و${+result.losses || 0} خسارة، وسجّل ${+result.goalsFor || 0} هدفاً واستقبل ${+result.goalsAgainst || 0}.`,
-            `تصدّر ${scorerPlayer.name_ar || scorerPlayer.name} هدافي الفريق بـ${+scorer.stats.g || 0} هدفاً، وصنع ${assisterPlayer.name_ar || assisterPlayer.name} ${+assister.stats.a || 0} أهداف، وحقق ${bestPlayer.name_ar || bestPlayer.name} أفضل متوسط تقييم بلغ ${best.average.toFixed(1)}.`,
-            "النتيجة الرسمية وإرسال ترتيب تحدي اليوم مأخوذان من الخادم الموثوق، ولم يتم إنشاء موسم مكرر."
-          ]
-        }
-      };
-
-      renderFinalScorePanel(
-        Ct.savedRun,
-        saveMeta
-      );
-      renderStoredSeasonReview();
-      xt("endBlock").classList.add("on");
-      clearSecureSeasonResumeMarker();
-      setSecureSeasonBusy(!1);
-      translateUiTree(
-        xt("scr-season")
-      );
-
-      window.setTimeout(() => {
-        Ct && Ct.savedRun &&
-          renderSeasonReviewLeaderboard(
-            Ct.savedRun
-          )
-      }, 150);
-
-      return !0
-    }
-
-    async function recoverDailySkipFromServer(
-      reason = "slow_response"
-    ) {
-      if (dailySkipRecoveryPromise) {
-        return dailySkipRecoveryPromise
-      }
-
-      const pending = dailySkipRecoveryPending;
-
-      if (
-        !pending ||
-        pending.phase !== "failed" ||
-        !Ct ||
-        Ct.done ||
-        !gt ||
-        !gt.isDaily ||
-        pending.runId !== Ct.serverRunId
-      ) return !1;
-
-      dailySkipRecoveryPromise =
-        (async () => {
-          setSecureSeasonBusy(
-            !0,
-            isArabicUi()
-              ? "جارٍ إنهاء تحدي اليوم…"
-              : "Finishing Daily Challenge…"
-          );
-
-          setDraftBackendStatus(
-            "testing",
-            "Daily Skip To End: checking the trusted saved season."
-          );
-
-          try {
-            await ensureAuthenticatedOnlineBackend();
-
-            const seasonResult =
-              await onlineClient.functions.invoke(
-                "start-season",
-                {
-                  body: {
-                    runId: pending.runId
-                  }
-                }
-              );
-
-            if (seasonResult.error) {
-              throw seasonResult.error
-            }
-
-            if (
-              !seasonResult.data ||
-              !seasonResult.data.ok ||
-              !seasonResult.data.state
-            ) {
-              throw new Error(
-                seasonResult.data &&
-                seasonResult.data.errorCode ||
-                "DAILY_SKIP_RECOVERY_REJECTED"
-              )
-            }
-
-            if (
-              !dailySkipRecoveryPending ||
-              dailySkipRecoveryPending.token !==
-                pending.token ||
-              !Ct ||
-              Ct.done
-            ) return !0;
-
-            const state =
-                seasonResult.data.state,
-              recoveredMatchday =
-                +state.currentMatchday;
-
-            if (
-              state.status === "completed" &&
-              state.result
-            ) {
-              dailySkipRecoveryPending = null;
-
-              const recovered =
-                renderRecoveredCompletedSeason(
-                  state
-                );
-
-              if (recovered) {
-                setDraftBackendStatus(
-                  "ok",
-                  "✓ Daily season recovered from the trusted server result."
-                );
-                l(
-                  isArabicUi()
-                    ? "تم استرجاع نتيجة تحدي اليوم بأمان."
-                    : "Daily Challenge result recovered safely."
-                )
-              }
-
-              return recovered
-            }
-
-            if (
-              Number.isFinite(recoveredMatchday) &&
-              recoveredMatchday >
-                pending.expectedMatchday
-            ) {
-              dailySkipRecoveryPending = null;
-              initializeSecureSeasonScreen(state);
-              setDraftBackendStatus(
-                "ok",
-                "✓ Daily season synchronized with newer trusted server progress."
-              );
-              l(
-                isArabicUi()
-                  ? "تم استرجاع تقدم الموسم من الخادم."
-                  : "Newer season progress recovered from the server."
-              );
-              return !0
-            }
-
-            throw new Error(
-              `DAILY_SKIP_RECOVERY_NOT_ADVANCED:${reason}:client=${pending.expectedMatchday}:server=${Number.isFinite(recoveredMatchday) ? recoveredMatchday : "unknown"}`
-            )
-          } catch (error) {
-            console.warn(
-              "Could not recover Daily Skip To End.",
-              error
-            );
-
-            setDraftBackendStatus(
-              "error",
-              "Daily Skip To End has not advanced yet. The saved season is safe; retry once after the button unlocks."
-            );
-
-            return !1
-          } finally {
-            if (Ct && !Ct.done) {
-              xt("skipEndBtn").textContent =
-                "Skip To End";
-              setSecureSeasonBusy(!1)
-            }
-          }
-        })().finally(() => {
-          dailySkipRecoveryPromise = null
-        });
-
-      return dailySkipRecoveryPromise
     }
 
     async function skipSecureServerSeason() {
@@ -9024,24 +8393,7 @@ function S(t, s) {
         Ct.serverActionPending
       ) return;
 
-      const expectedMatchday = Ct.md,
-        isDailySkip = !!(
-          gt && gt.isDaily
-        ),
-        recoveryToken = isDailySkip
-          ? ++dailySkipRecoverySerial
-          : 0;
-
-      if (isDailySkip) {
-        dailySkipRecoveryPending = {
-          token: recoveryToken,
-          runId: Ct.serverRunId,
-          expectedMatchday,
-          startedAt: Date.now(),
-          phase: "in_flight",
-          action: "skip"
-        }
-      }
+      const expectedMatchday = Ct.md;
 
       xt("skipEndBtn").textContent =
         "Skipping…";
@@ -9054,31 +8406,8 @@ function S(t, s) {
       try {
         await ensureAuthenticatedOnlineBackend();
 
-        let slowDailyTimer = null;
-
-        if (isDailySkip) {
-          slowDailyTimer = window.setTimeout(() => {
-            if (
-              dailySkipRecoveryPending &&
-              dailySkipRecoveryPending.token === recoveryToken &&
-              dailySkipRecoveryPending.phase === "in_flight" &&
-              Ct &&
-              !Ct.done
-            ) {
-              setSecureSeasonBusy(
-                !0,
-                isArabicUi()
-                  ? "جارٍ إنهاء تحدي اليوم… لا تضغط مرة أخرى"
-                  : "Finishing Daily Challenge… do not tap again"
-              )
-            }
-          }, 4000)
-        }
-
-        let result;
-
-        try {
-          result = await onlineClient.functions.invoke(
+        const { data, error } =
+          await onlineClient.functions.invoke(
             "skip-season",
             {
               body: {
@@ -9086,25 +8415,7 @@ function S(t, s) {
                 expectedMatchday
               }
             }
-          )
-        } finally {
-          if (null !== slowDailyTimer) {
-            window.clearTimeout(slowDailyTimer)
-          }
-        }
-
-        const { data, error } = result;
-
-        if (
-          isDailySkip &&
-          (
-            !dailySkipRecoveryPending ||
-            dailySkipRecoveryPending.token !==
-              recoveryToken ||
-            !Ct ||
-            Ct.done
-          )
-        ) return;
+          );
 
         if (error) throw error;
 
@@ -9121,10 +8432,6 @@ function S(t, s) {
           )
         }
 
-        if (isDailySkip) {
-          dailySkipRecoveryPending = null
-        }
-
         applyTrustedPlayerStatsState(
           data.state
         );
@@ -9132,67 +8439,46 @@ function S(t, s) {
         Ct.serverFinalResult =
           data.state.result || null;
 
-        const pendingMatchdays =
-          data.revealedMatchdays.filter(
-            matchday =>
-              (+matchday.matchday || 0) >
-              Ct.md
-          );
-
         for (
-          let index = 0;
-          index < pendingMatchdays.length;
-          index++
+          const matchday of
+          data.revealedMatchdays
         ) {
-          const matchday =
-              pendingMatchdays[index],
-            isFinalItem =
-              index === pendingMatchdays.length - 1;
+          const serverMatchday =
+              +matchday.matchday || 0,
+            expectedNext = Ct.md + 1;
 
-          if (isFinalItem) {
-            const serverMatchday =
-                +matchday.matchday || 0,
-              expectedNext = Ct.md + 1;
+          if (serverMatchday <= Ct.md) {
+            continue
+          }
 
-            if (serverMatchday !== expectedNext) {
-              throw new Error(
-                "SKIP_MATCHDAY_SEQUENCE_MISMATCH"
-              )
-            }
+          if (serverMatchday !== expectedNext) {
+            throw new Error(
+              "SKIP_MATCHDAY_SEQUENCE_MISMATCH"
+            )
+          }
 
-            const localMatches =
-              safeServerMatchdayToLocal(
-                matchday
-              );
-
-            if (!localMatches) {
-              throw new Error(
-                "SKIP_MATCHDAY_PAYLOAD_MISSING"
-              )
-            }
-
-            Ct.plannedResults[Ct.md] =
-              localMatches.map(match => ({
-                h: match.h,
-                a: match.a,
-                score: [
-                  match.score[0],
-                  match.score[1]
-                ]
-              }));
-
-            A(!1)
-          } else {
-            applySkippedMatchdaySilently(
+          const localMatches =
+            safeServerMatchdayToLocal(
               matchday
             );
 
-            if ((index + 1) % 8 === 0) {
-              await new Promise(resolve =>
-                window.setTimeout(resolve, 0)
-              )
-            }
+          if (!localMatches) {
+            throw new Error(
+              "SKIP_MATCHDAY_PAYLOAD_MISSING"
+            )
           }
+
+          Ct.plannedResults[Ct.md] =
+            localMatches.map(match => ({
+              h: match.h,
+              a: match.a,
+              score: [
+                match.score[0],
+                match.score[1]
+              ]
+            }));
+
+          A(!1)
         }
 
         if (!Ct.done && Ct.md === 34) {
@@ -9210,31 +8496,9 @@ function S(t, s) {
           error
         );
 
-        if (
-          isDailySkip &&
-          Ct &&
-          !Ct.done
-        ) {
-          if (
-            dailySkipRecoveryPending &&
-            dailySkipRecoveryPending.token === recoveryToken
-          ) {
-            dailySkipRecoveryPending.phase = "failed"
-          }
-
-          const recovered =
-            await recoverDailySkipFromServer(
-              "request_error"
-            );
-
-          if (recovered) return
-        }
-
         setDraftBackendStatus(
           "error",
-          isDailySkip
-            ? "Daily Skip To End did not finish loading. Your attempt is safely saved; retry once or reopen the Daily Challenge."
-            : "The season could not be skipped right now. Your progress is safely saved."
+          "The season could not be skipped right now. Your progress is safely saved."
         )
       } finally {
         if (Ct && !Ct.done) {
@@ -9639,12 +8903,7 @@ Ct.myMatches.push({
           renderFinalScorePanel(Ct.savedRun, saveMeta);
           renderStoredSeasonReview();
           xt("endBlock").classList.add("on");
-          window.setTimeout(() => {
-            Ct && Ct.savedRun &&
-              renderSeasonReviewLeaderboard(
-                Ct.savedRun
-              )
-          }, 150)
+          renderSeasonReviewLeaderboard(Ct.savedRun)
         }()
     }
 
@@ -9843,13 +9102,9 @@ Ct.myMatches.push({
       if (!article) return;
 
       const review =
-        lastSeasonReviewData.recovered
-          ? isArabicUi()
-            ? lastSeasonReviewData.arabic
-            : lastSeasonReviewData.english
-          : isArabicUi()
-            ? buildSaudiSeasonReview(lastSeasonReviewData)
-            : lastSeasonReviewData.english;
+        isArabicUi()
+          ? buildSaudiSeasonReview(lastSeasonReviewData)
+          : lastSeasonReviewData.english;
 
       if (!review) return;
 
@@ -10156,7 +9411,7 @@ xt("dailyStartBtn").addEventListener("click", async () => {
       `SPL Draft ${PHASE5_PRODUCTION_BUILD}: secure luck-based Daily Challenge, three eligible attempts and separate Daily leaderboard are active.`
     );
     console.info(
-      `SPL Draft ${PHASE6_BUILD}: corrected Daily Skip recovery and forced Daily Skip Roll hiding active.`
+      `SPL Draft ${PHASE6_BUILD}: public card database removed; secure backend-only test build active.`
     );
     document.documentElement.dataset.phase6Build =
       PHASE6_BUILD;
@@ -10202,41 +9457,6 @@ xt("dailyStartBtn").addEventListener("click", async () => {
         }
       }
     }).catch(() => {});
-    document.addEventListener(
-      "visibilitychange",
-      () => {
-        if (
-          document.visibilityState === "visible" &&
-          dailySkipRecoveryPending &&
-          dailySkipRecoveryPending.phase === "failed" &&
-          Ct &&
-          !Ct.done &&
-          !Ct.serverActionPending
-        ) {
-          recoverDailySkipFromServer(
-            "tab_visible"
-          )
-        }
-      }
-    );
-
-    window.addEventListener(
-      "online",
-      () => {
-        if (
-          dailySkipRecoveryPending &&
-          dailySkipRecoveryPending.phase === "failed" &&
-          Ct &&
-          !Ct.done &&
-          !Ct.serverActionPending
-        ) {
-          recoverDailySkipFromServer(
-            "connection_restored"
-          )
-        }
-      }
-    );
-
     xt("copyFinalResultBtn").addEventListener("click", () => Ct && Ct.savedRun && copyRunResult(Ct.savedRun));
     xt("viewRecordsBtn").addEventListener("click", () => {
       renderRecordsScreen();
