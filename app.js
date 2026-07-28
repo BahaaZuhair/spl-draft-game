@@ -7157,6 +7157,13 @@ const allClubNames =
     }
 
 function z(t) {
+  // Daily Challenge is intentionally no-skip. Block the action even if an
+  // older cached screen or a manual event tries to trigger the shared button.
+  if (t && gt && gt.isDaily) {
+    X(!1);
+    return
+  }
+
   if (
     DRAFT_SERVER_MODE_ENABLED &&
     gt &&
@@ -7179,43 +7186,43 @@ function z(t) {
 }
 
     function X(t) {
-      const button = xt("skipBtn"),
-        secureDaily =
-          !!(
-            gt &&
-            gt.isDaily &&
-            gt.serverMode &&
-            SERVER_DAILY_ENABLED
-          ),
-        dailyHasAlternative =
-          !gt ||
-          !gt.isDaily ||
-          secureDaily ||
-          (
-            Array.isArray(gt.dailyPlan) &&
-            (
-              (
-                gt.dailyPlan[
-                  gt.dailyPickIndex
-                ] ||
-                []
-              ).length >
-              gt.dailyChoiceIndex + 1
-            )
-          );
+      const button = xt("skipBtn");
 
-      t &&
-      gt &&
-      gt.skipsLeft > 0 &&
-      !gt.complete &&
-      dailyHasAlternative
-        ? (
-            button.style.display =
-              "inline-block",
-            button.textContent =
-              `Use Skip (${gt.skipsLeft} left)`
-          )
-        : button.style.display = "none"
+      // The Daily Challenge reuses the normal draft screen, but it must never
+      // expose the normal-mode Skip Roll control.
+      if (gt && gt.isDaily) {
+        button.hidden = !0;
+        button.disabled = !0;
+        button.style.setProperty(
+          "display",
+          "none",
+          "important"
+        );
+        return
+      }
+
+      // Remove the Daily-only hiding when a normal draft starts later in the
+      // same browser session.
+      button.hidden = !1;
+      button.style.removeProperty("display");
+
+      const canUseSkip =
+        !!(
+          t &&
+          gt &&
+          gt.skipsLeft > 0 &&
+          !gt.complete
+        );
+
+      if (canUseSkip) {
+        button.disabled = !1;
+        button.style.display = "inline-block";
+        button.textContent =
+          `Use Skip (${gt.skipsLeft} left)`
+      } else {
+        button.disabled = !0;
+        button.style.display = "none"
+      }
     }
 
     function k(t) {
