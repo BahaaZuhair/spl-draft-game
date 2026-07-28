@@ -98,7 +98,7 @@
 
     const PHASE6_NO_DATABASE_BUILD = !0,
       PHASE6_BUILD =
-        "arabic-design-final-2026-07-19",
+        "daily-skip-recovery-hotfix-2",
       TURNSTILE_SITE_KEY = "0x4AAAAAAD4gP5siHnkvX-5i",
       TURNSTILE_SCRIPT_TIMEOUT_MS = 15000,
       TURNSTILE_CHALLENGE_TIMEOUT_MS = 45000,
@@ -5552,9 +5552,28 @@ function getDailyCurrentChoice() {
           "Daily Challenge"
       }
 
-      if (skipRollButton && dailyActive) {
-        skipRollButton.style.display = "none";
-        skipRollButton.disabled = !0
+      if (skipRollButton) {
+        if (dailyActive) {
+          skipRollButton.hidden = !0;
+          skipRollButton.setAttribute(
+            "aria-hidden",
+            "true"
+          );
+          skipRollButton.style.setProperty(
+            "display",
+            "none",
+            "important"
+          );
+          skipRollButton.disabled = !0
+        } else {
+          skipRollButton.hidden = !1;
+          skipRollButton.removeAttribute(
+            "aria-hidden"
+          );
+          skipRollButton.style.removeProperty(
+            "display"
+          )
+        }
       }
     }
 
@@ -7199,11 +7218,23 @@ function z(t) {
       const button = xt("skipBtn");
 
       if (gt && gt.isDaily) {
-        button.style.display = "none";
+        button.hidden = !0;
+        button.setAttribute(
+          "aria-hidden",
+          "true"
+        );
+        button.style.setProperty(
+          "display",
+          "none",
+          "important"
+        );
         button.disabled = !0;
         return
       }
 
+      button.hidden = !1;
+      button.removeAttribute("aria-hidden");
+      button.style.removeProperty("display");
       button.disabled = !1;
 
       const secureDaily =
@@ -8791,80 +8822,28 @@ function S(t, s) {
           setSecureSeasonBusy(
             !0,
             isArabicUi()
-              ? "جارٍ استعادة الموسم…"
-              : "Reconnecting…"
+              ? "جارٍ إنهاء تحدي اليوم…"
+              : "Finishing Daily Challenge…"
           );
 
           setDraftBackendStatus(
             "testing",
-            "Daily Skip To End: checking the trusted saved attempt."
+            "Daily Skip To End: checking the trusted saved season."
           );
 
           try {
             await ensureAuthenticatedOnlineBackend();
 
-            const marker =
-                readSecureDailyResumeMarker(),
-              attemptId =
-                gt.dailyAttemptId ||
-                marker && marker.attemptId ||
-                null;
-
-            if (!attemptId) {
-              throw new Error(
-                "DAILY_SKIP_ATTEMPT_ID_MISSING"
-              )
-            }
-
-            const dailyResult = await withTimeout(
-              onlineClient.functions.invoke(
-                "daily-challenge",
-                {
-                  body: { attemptId }
-                }
-              ),
-              3000,
-              "Daily skip recovery check"
-            );
-
-            if (dailyResult.error) {
-              throw dailyResult.error
-            }
-
-            const current =
-              dailyResult.data &&
-              dailyResult.data.current;
-
-            if (
-              !dailyResult.data ||
-              !dailyResult.data.ok ||
-              !current ||
-              !current.attempt ||
-              !current.draft
-            ) {
-              throw new Error(
-                "DAILY_SKIP_RECOVERY_STATE_MISSING"
-              )
-            }
-
-            const runId =
-              current.draft.runId ||
-              pending.runId;
-
-            if (runId !== pending.runId) {
-              throw new Error(
-                "DAILY_SKIP_RECOVERY_RUN_MISMATCH"
-              )
-            }
-
             const seasonResult = await withTimeout(
               onlineClient.functions.invoke(
                 "start-season",
                 {
-                  body: { runId }
+                  body: {
+                    runId: pending.runId
+                  }
                 }
               ),
-              4000,
+              7000,
               "Daily season recovery"
             );
 
@@ -8893,7 +8872,9 @@ function S(t, s) {
             ) return !0;
 
             const state =
-              seasonResult.data.state;
+                seasonResult.data.state,
+              recoveredMatchday =
+                +state.currentMatchday;
 
             if (
               state.status === "completed" &&
@@ -8922,25 +8903,26 @@ function S(t, s) {
             }
 
             if (
-              Number.isFinite(+state.currentMatchday) &&
-              +state.currentMatchday >= Ct.md
+              Number.isFinite(recoveredMatchday) &&
+              recoveredMatchday >
+                pending.expectedMatchday
             ) {
               dailySkipRecoveryPending = null;
               initializeSecureSeasonScreen(state);
               setDraftBackendStatus(
                 "ok",
-                "✓ Daily season synchronized with the trusted server state."
+                "✓ Daily season synchronized with newer trusted server progress."
               );
               l(
                 isArabicUi()
-                  ? "تمت مزامنة الموسم. يمكنك المتابعة بأمان."
-                  : "Season synchronized. You can continue safely."
+                  ? "تم استرجاع تقدم الموسم من الخادم."
+                  : "Newer season progress recovered from the server."
               );
               return !0
             }
 
             throw new Error(
-              `DAILY_SKIP_RECOVERY_NOT_ADVANCED:${reason}`
+              `DAILY_SKIP_RECOVERY_NOT_ADVANCED:${reason}:client=${pending.expectedMatchday}:server=${Number.isFinite(recoveredMatchday) ? recoveredMatchday : "unknown"}`
             )
           } catch (error) {
             console.warn(
@@ -8950,7 +8932,7 @@ function S(t, s) {
 
             setDraftBackendStatus(
               "error",
-              "Daily Skip To End did not finish loading. The server copy remains safe; retry once or reopen the Daily Challenge."
+              "Daily Skip To End has not advanced yet. The saved season is safe; retry once after the button unlocks."
             );
 
             return !1
@@ -9017,7 +8999,7 @@ function S(t, s) {
           result = isDailySkip
             ? await withTimeout(
                 request,
-                7000,
+                10000,
                 "Daily Skip To End"
               )
             : await request,
@@ -10080,7 +10062,7 @@ xt("dailyStartBtn").addEventListener("click", async () => {
       `SPL Draft ${PHASE5_PRODUCTION_BUILD}: secure luck-based Daily Challenge, three eligible attempts and separate Daily leaderboard are active.`
     );
     console.info(
-      `SPL Draft ${PHASE6_BUILD}: Daily Skip recovery hotfix active; Daily Skip Roll hidden.`
+      `SPL Draft ${PHASE6_BUILD}: corrected Daily Skip recovery and forced Daily Skip Roll hiding active.`
     );
     document.documentElement.dataset.phase6Build =
       PHASE6_BUILD;
