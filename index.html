@@ -74,6 +74,19 @@
       <h1 class="h1">SPL Draft</h1>
       <p class="lede">Draft a squad from 26 seasons of the Saudi Pro League, then take it through a full 34-matchday campaign.</p>
       <div class="panel menupanel">
+        <div data-i18n-skip="true" role="note" aria-label="Thanks to sevromweh"
+             style="margin:0 0 16px;padding:14px 16px;border:1px solid rgba(232,185,75,.58);border-radius:12px;background:linear-gradient(145deg,rgba(232,185,75,.16),rgba(232,185,75,.06));text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.18)">
+          <div dir="rtl" style="font-family:var(--arabic);font-size:18px;font-weight:800;line-height:1.7;color:var(--chalk)">
+            شكر خاص لـ
+            <a dir="ltr" href="https://x.com/sevromweh" target="_blank" rel="noopener noreferrer"
+               style="display:inline-block;color:var(--gold);font-weight:900;text-decoration:underline;text-underline-offset:4px">@sevromweh</a>
+          </div>
+          <div dir="ltr" style="margin-top:2px;color:var(--sand);font-size:12px;font-weight:700;line-height:1.5">
+            Special thanks to
+            <a href="https://x.com/sevromweh" target="_blank" rel="noopener noreferrer"
+               style="color:var(--gold);font-weight:800;text-decoration:underline;text-underline-offset:3px">@sevromweh</a>
+          </div>
+        </div>
         <label class="opt-label" for="teamNameInput">Enter Your Team Name</label>
         <input id="teamNameInput" class="nameinput" type="text" maxlength="25" autocomplete="off" spellcheck="false"
                placeholder="e.g. Desert Falcons" aria-label="Enter your team name">
@@ -81,6 +94,27 @@
         <div class="menubtns menu-actions-stack">
           <button class="btn" id="menuStartBtn">Start Game</button>
           <button class="btn" id="dailyChallengeBtn">Daily Challenge</button>
+          <button
+            class="btn ghost"
+            id="predictionsComingSoonBtn"
+            type="button"
+            disabled
+            aria-disabled="true"
+            data-i18n-skip="true"
+            title="Predictions Game — Coming Soon"
+            style="display:flex;align-items:center;justify-content:space-between;gap:12px;opacity:.72;cursor:not-allowed;border-color:rgba(232,185,75,.5);background:rgba(232,185,75,.06)"
+          >
+            <span style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px">
+              <span dir="rtl" lang="ar">لعبة التوقعات</span>
+              <span aria-hidden="true">•</span>
+              <span dir="ltr" lang="en">Predictions Game</span>
+            </span>
+            <span style="flex:none;padding:3px 9px;border:1px solid rgba(232,185,75,.55);border-radius:999px;color:var(--gold);font-size:11px;font-weight:800;white-space:nowrap">
+              <span dir="rtl" lang="ar">قريباً</span>
+              <span aria-hidden="true"> / </span>
+              <span dir="ltr" lang="en">Coming Soon</span>
+            </span>
+          </button>
           <button class="btn ghost" id="howtoBtn">How to Play</button>
         </div>
         <div class="champions-goal-banner" role="note">
