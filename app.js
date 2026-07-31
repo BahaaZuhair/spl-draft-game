@@ -1233,7 +1233,7 @@ function getDerivedAIStrength(clubId) {
         "Season": "الموسم",
         "Roll": "لف",
         "Use Skip": "استخدم التخطّي",
-        "The roulette only offers club–season pools that can fill one of your open positions.": "العجلة ما تعرض إلا نادي وموسم يقدرون يغطون مركز فاضي عندك.",
+        "The roulette only offers club–season pools that can fill one of your open positions.": "العجلة ما يعرض إلا نادي وموسم يقدرون يغطون مركز فاضي عندك.",
         "Squad summary": "ملخص التشكيلة",
         "Season 25/26": "موسم 25/26",
         "Your draft": "فريقك",
